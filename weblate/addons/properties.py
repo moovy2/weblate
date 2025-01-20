@@ -1,52 +1,47 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-"""Properties cleanup addon.
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+"""
+Properties cleanup addon.
 
 This is reimplementation of
 https://github.com/freeplane/freeplane/blob/1.4.x/freeplane_ant/
 src/main/java/org/freeplane/ant/FormatTranslation.java
 """
 
+from __future__ import annotations
 
 import re
 
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy
 
 from weblate.addons.base import BaseAddon
-from weblate.addons.events import EVENT_PRE_COMMIT
+from weblate.addons.events import AddonEvent
+from weblate.addons.forms import PropertiesSortAddonForm
 
 SPLITTER = re.compile(r"\s*=\s*")
 UNICODE = re.compile(r"\\[uU][0-9a-fA-F]{4}")
 
 
-def sort_key(line):
+def sort_key(line: str, case_sensitive: bool) -> str:
     """Sort key for properties."""
     prefix = SPLITTER.split(line, 1)[0]
+    if case_sensitive:
+        return prefix
     return prefix.lower()
 
 
-def unicode_format(match):
-    """Callback for re.sub for formatting unicode chars."""
+def unicode_format(match) -> str:
+    """
+    Format unicode characters.
+
+    Callback for re.sub.
+    """
     return f"\\u{match.group(0)[2:].upper()}"
 
 
-def fix_newlines(lines):
+def fix_newlines(lines) -> None:
     """Convert newlines to unix."""
     for i, line in enumerate(lines):
         if line.endswith("\r\n"):
@@ -55,15 +50,15 @@ def fix_newlines(lines):
             lines[i] = line[:-1] + "\n"
 
 
-def format_unicode(lines):
-    """Standard formatting for unicode chars."""
+def format_unicode(lines) -> None:
+    """Format unicode characters."""
     for i, line in enumerate(lines):
         if UNICODE.findall(line) is None:
             continue
         lines[i] = UNICODE.sub(unicode_format, line)
 
 
-def value_quality(value):
+def value_quality(value) -> int:
     """Calculate value quality."""
     if not value:
         return 0
@@ -76,13 +71,13 @@ def value_quality(value):
 
 def filter_lines(lines):
     """Filter comments, empty lines and duplicate strings."""
-    result = []
+    result: list[str] = []
     lastkey = None
     lastvalue = None
 
     for line in lines:
         # Skip comments and blank lines
-        if line[0] == "#" or line.strip() == "":
+        if line[0] == "#" or not line.strip():
             continue
         parts = SPLITTER.split(line, 1)
 
@@ -95,7 +90,7 @@ def filter_lines(lines):
         value = value[:-1]
 
         # Empty translation
-        if value in ("", "[auto]", "[translate me]"):
+        if value in {"", "[auto]", "[translate me]"}:
             continue
 
         # Check for duplicate key
@@ -121,12 +116,12 @@ def filter_lines(lines):
     return result
 
 
-def format_file(filename):
+def format_file(filename: str, case_sensitive: bool) -> bool:
     """Format single properties file."""
     with open(filename) as handle:
         lines = handle.readlines()
 
-    result = sorted(lines, key=sort_key)
+    result = sorted(lines, key=lambda line: sort_key(line, case_sensitive))
 
     fix_newlines(result)
     format_unicode(result)
@@ -135,15 +130,23 @@ def format_file(filename):
     if lines != result:
         with open(filename, "w") as handle:
             handle.writelines(result)
+        return True
+    return False
 
 
 class PropertiesSortAddon(BaseAddon):
-    events = (EVENT_PRE_COMMIT,)
+    events: set[AddonEvent] = {
+        AddonEvent.EVENT_PRE_COMMIT,
+    }
     name = "weblate.properties.sort"
-    verbose = _("Format the Java properties file")
-    description = _("Formats and sorts the Java properties file.")
+    verbose = gettext_lazy("Format the Java properties file")
+    description = gettext_lazy("Formats and sorts the Java properties file.")
     compat = {"file_format": {"properties-utf8", "properties", "gwt"}}
     icon = "sort-alphabetical.svg"
+    settings_form = PropertiesSortAddonForm
 
-    def pre_commit(self, translation, author):
-        format_file(translation.get_filename())
+    def pre_commit(self, translation, author: str, store_hash: bool) -> None:
+        case_sensitive = self.instance.configuration.get("case_sensitive", False)
+        changed = format_file(translation.get_filename(), case_sensitive)
+        if changed and store_hash:
+            translation.store_hash()

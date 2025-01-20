@@ -1,60 +1,53 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
 import django.views.defaults
 import rest_framework.exceptions
 from django.conf import settings
 from django.middleware.csrf import REASON_NO_CSRF_COOKIE, REASON_NO_REFERER
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext
 from sentry_sdk import last_event_id
 
 from weblate.trans.util import render
 from weblate.utils.errors import report_error
 
+if TYPE_CHECKING:
+    from weblate.auth.models import AuthenticatedHttpRequest
 
-def bad_request(request, exception=None):
+
+def bad_request(request: AuthenticatedHttpRequest, exception=None):
     """Error handler for bad request."""
-    if "text/html" not in request.META.get("HTTP_ACCEPT", ""):
+    if "text/html" not in request.headers.get("accept", ""):
         return rest_framework.exceptions.bad_request(request, exception)
     if exception:
-        report_error(cause="Bad request")
-    return render(request, "400.html", {"title": _("Bad Request")}, status=400)
+        report_error("Bad request")
+    return render(request, "400.html", {"title": gettext("Bad Request")}, status=400)
 
 
-def not_found(request, exception=None):
+def not_found(request: AuthenticatedHttpRequest, exception=None):
     """Error handler showing list of available projects."""
-    return render(request, "404.html", {"title": _("Page Not Found")}, status=404)
+    return render(request, "404.html", {"title": gettext("Page Not Found")}, status=404)
 
 
-def denied(request, exception=None):
-    return render(request, "403.html", {"title": _("Permission Denied")}, status=403)
+def denied(request: AuthenticatedHttpRequest, exception=None):
+    return render(
+        request, "403.html", {"title": gettext("Permission Denied")}, status=403
+    )
 
 
-def csrf_failure(request, reason=""):
+def csrf_failure(request: AuthenticatedHttpRequest, reason=""):
     response = render(
         request,
         "403_csrf.html",
         {
-            "title": _("Permission Denied"),
+            "title": gettext("Permission Denied"),
             "no_referer": reason == REASON_NO_REFERER,
             "no_cookie": reason == REASON_NO_CSRF_COOKIE,
+            "reason": reason,
         },
         status=403,
     )
@@ -68,16 +61,16 @@ def csrf_failure(request, reason=""):
     return response
 
 
-def server_error(request):
+def server_error(request: AuthenticatedHttpRequest):
     """Error handler for server errors."""
-    if "text/html" not in request.META.get("HTTP_ACCEPT", ""):
+    if "text/html" not in request.headers.get("accept", ""):
         return rest_framework.exceptions.server_error(request)
     try:
         return render(
             request,
             "500.html",
             {
-                "title": _("Internal Server Error"),
+                "title": gettext("Internal Server Error"),
                 "sentry_dsn": settings.SENTRY_DSN,
                 "sentry_event_id": last_event_id(),
             },

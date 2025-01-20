@@ -1,43 +1,23 @@
+# Copyright © Manuel Laggner <manuel.laggner@egger.com>
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright ©  2018 Manuel Laggner <manuel.laggner@egger.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from django.conf import settings
-from requests.auth import _basic_auth_str
+from __future__ import annotations
 
-from .base import MachineTranslation
+from typing import TYPE_CHECKING
+
+from .base import DownloadTranslations, MachineTranslation
 from .forms import SAPMachineryForm
+
+if TYPE_CHECKING:
+    from requests.auth import AuthBase
 
 
 class SAPTranslationHub(MachineTranslation):
     # https://api.sap.com/api/translationhub/overview
     name = "SAP Translation Hub"
     settings_form = SAPMachineryForm
-
-    @staticmethod
-    def migrate_settings():
-        return {
-            "url": settings.MT_SAP_BASE_URL,
-            "key": settings.MT_SAP_SANDBOX_APIKEY,
-            "username": settings.MT_SAP_USERNAME,
-            "password": settings.MT_SAP_PASSWORD,
-            "enable_mt": bool(settings.MT_SAP_USE_MT),
-        }
 
     @property
     def api_base_url(self):
@@ -46,19 +26,20 @@ class SAPTranslationHub(MachineTranslation):
             return base
         return f"{base}/v1"
 
-    def get_authentication(self):
-        """Hook for backends to allow add authentication headers to request."""
+    def get_headers(self):
+        """Add authentication headers to request."""
         # to access the sandbox
         result = {}
         if self.settings["key"]:
             result["APIKey"] = self.settings["key"]
 
+        return result
+
+    def get_auth(self) -> tuple[str, str] | AuthBase | None:
         # to access the productive API
         if self.settings["username"] and self.settings["password"]:
-            result["Authorization"] = _basic_auth_str(
-                self.settings["username"], self.settings["password"]
-            )
-        return result
+            return (self.settings["username"], self.settings["password"])
+        return None
 
     def download_languages(self):
         """Get all available languages from SAP Translation Hub."""
@@ -70,14 +51,13 @@ class SAPTranslationHub(MachineTranslation):
 
     def download_translations(
         self,
-        source,
-        language,
+        source_language,
+        target_language,
         text: str,
         unit,
         user,
-        search: bool,
         threshold: int = 75,
-    ):
+    ) -> DownloadTranslations:
         """Download list of possible translations from a service."""
         # should the machine translation service be used?
         # (rather than only the term database)
@@ -85,8 +65,8 @@ class SAPTranslationHub(MachineTranslation):
 
         # build the json body
         data = {
-            "targetLanguages": [language],
-            "sourceLanguage": source,
+            "targetLanguages": [target_language],
+            "sourceLanguage": source_language,
             "enableMT": enable_mt,
             "enableTranslationQualityEstimation": enable_mt,
             "units": [{"value": text}],
@@ -104,9 +84,12 @@ class SAPTranslationHub(MachineTranslation):
         # prepare the translations for weblate
         for item in payload["units"]:
             for translation in item["translations"]:
+                quality = translation.get("qualityIndex", 100)
+                if quality < threshold:
+                    continue
                 yield {
                     "text": translation["value"],
-                    "quality": translation.get("qualityIndex", 100),
+                    "quality": quality,
                     "show_quality": "qualityIndex" in translation,
                     "service": self.name,
                     "source": text,

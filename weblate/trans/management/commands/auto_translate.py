@@ -1,21 +1,6 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 from django.core.management.base import CommandError
 
@@ -31,7 +16,7 @@ class Command(WeblateTranslationCommand):
 
     help = "performs automatic translation based on other components"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser) -> None:
         super().add_arguments(parser)
         parser.add_argument(
             "--user", default="anonymous", help=("User performing the change")
@@ -72,36 +57,35 @@ class Command(WeblateTranslationCommand):
             help=("Translation mode; translate, fuzzy or suggest"),
         )
 
-    def handle(self, *args, **options):
+    def handle(self, *args, **options) -> None:
         # Get translation object
         translation = self.get_translation(**options)
 
         # Get user
         try:
             user = User.objects.get(username=options["user"])
-        except User.DoesNotExist:
-            raise CommandError("User does not exist!")
+        except User.DoesNotExist as error:
+            msg = "User does not exist!"
+            raise CommandError(msg) from error
 
         source = None
         if options["source"]:
-            parts = options["source"].split("/")
-            if len(parts) != 2:
-                raise CommandError("Invalid source component specified!")
             try:
-                component = Component.objects.get(project__slug=parts[0], slug=parts[1])
-            except Component.DoesNotExist:
-                raise CommandError("No matching source component found!")
+                component = Component.objects.get_by_path(options["source"])
+            except Component.DoesNotExist as error:
+                msg = "No matching source component found!"
+                raise CommandError(msg) from error
             source = component.id
 
         if options["mt"]:
             for translator in options["mt"]:
-                if translator not in MACHINERY.keys():
-                    raise CommandError(
-                        f"Machine translation {translator} is not available"
-                    )
+                if translator not in MACHINERY:
+                    msg = f"Machine translation {translator} is not available"
+                    raise CommandError(msg)
 
-        if options["mode"] not in ("translate", "fuzzy", "suggest"):
-            raise CommandError("Invalid translation mode specified!")
+        if options["mode"] not in {"translate", "fuzzy", "suggest"}:
+            msg = "Invalid translation mode specified!"
+            raise CommandError(msg)
 
         if options["inconsistent"]:
             filter_type = "check:inconsistent"

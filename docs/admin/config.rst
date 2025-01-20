@@ -7,7 +7,7 @@ All settings are stored in :file:`settings.py` (as is usual for Django).
 
 .. note::
 
-    After changing any of these settings, you need to restart Weblate - both
+    After changing any of these settings, you need to restart Weblate — both
     WSGI and Celery processes.
 
     In case it is run as ``mod_wsgi``, you need to restart Apache to reload the
@@ -18,6 +18,25 @@ All settings are stored in :file:`settings.py` (as is usual for Django).
     Please also check :doc:`Django's documentation <django:ref/settings>` for
     parameters configuring Django itself.
 
+.. setting:: ADMINS_CONTACT
+
+ADMINS_CONTACT
+--------------
+
+Configures where contact form sends e-mails. If not configured,
+e-mail addresses from :setting:`ADMINS` are used.
+
+Configure this as a list of e-mail addresses:
+
+.. code-block:: python
+
+   ADMINS_CONTACT = ["admin@example.com", "support@example.com"]
+
+.. seealso::
+
+   :setting:`CONTACT_FORM`,
+   :setting:`ADMINS`
+
 .. setting:: AKISMET_API_KEY
 
 AKISMET_API_KEY
@@ -26,6 +45,19 @@ AKISMET_API_KEY
 Weblate can use Akismet to check incoming anonymous suggestions for spam.
 Visit `akismet.com <https://akismet.com/>`_ to purchase an API key
 and associate it with a site.
+
+.. setting:: ALTCHA_MAX_NUMBER
+
+ALTCHA_MAX_NUMBER
+-----------------
+
+.. versionadded:: 5.9
+
+Configures a maximal number for ALTCHA proof-of-work mechanism.
+
+.. seealso::
+
+    `ALTCHA Proof of Work Mechanism <https://altcha.org/docs/proof-of-work/>`_
 
 .. setting:: ANONYMOUS_USER_NAME
 
@@ -43,10 +75,8 @@ Username of users that are not signed in.
 AUDITLOG_EXPIRY
 ---------------
 
-.. versionadded:: 3.6
-
-How many days Weblate should keep audit logs, which contain info about account
-activity.
+The maximum number of days Weblate will keep audit logs containing information
+about the account activity.
 
 Defaults to 180 days.
 
@@ -55,8 +85,6 @@ Defaults to 180 days.
 AUTH_LOCK_ATTEMPTS
 ------------------
 
-.. versionadded:: 2.14
-
 Maximum number of failed authentication attempts before rate limiting is applied.
 
 This is currently applied in the following locations:
@@ -64,7 +92,7 @@ This is currently applied in the following locations:
 * Sign in. Deletes the account password, preventing the user from signing in
   without requesting a new password.
 * Password reset. Prevents new e-mails from being sent, avoiding spamming
-  users with too many password reset attempts.
+  users with too many password-reset attempts.
 
 Defaults to 10.
 
@@ -77,12 +105,6 @@ Defaults to 10.
 AUTO_UPDATE
 -----------
 
-.. versionadded:: 3.2
-
-.. versionchanged:: 3.11
-
-   The original on/off option was changed to differentiate which strings are accepted.
-
 Updates all repositories on a daily basis.
 
 .. hint::
@@ -93,7 +115,7 @@ Updates all repositories on a daily basis.
 
     On/off options exist in addition to string selection for backward compatibility.
 
-Options are:
+The options are:
 
 ``"none"``
     No daily updates.
@@ -131,8 +153,6 @@ Libravatar, as per https://www.libravatar.org/
 AUTH_TOKEN_VALID
 ----------------
 
-.. versionadded:: 2.14
-
 How long the authentication token and temporary password from password reset e-mails is valid for.
 Set in number of seconds, defaulting to 172800 (2 days).
 
@@ -140,9 +160,10 @@ Set in number of seconds, defaulting to 172800 (2 days).
 AUTH_PASSWORD_DAYS
 ------------------
 
-.. versionadded:: 2.15
+How many days Weblate rejects reusing a previously used password for a user.
 
-How many days using the same password should be allowed.
+The checking is based on the audit log, :setting:`AUDITLOG_EXPIRY` needs to be
+at least same as this.
 
 .. note::
 
@@ -159,7 +180,7 @@ List of automatic fixes to apply when saving a string.
 
 .. note::
 
-    Provide a fully-qualified path to the Python class that implementing the
+    Provide a fully-qualified path to the Python class that implements the
     autofixer interface.
 
 Available fixes:
@@ -172,6 +193,8 @@ Available fixes:
     Removes zero-width space characters if the source does not contain any.
 ``weblate.trans.autofixes.chars.RemoveControlChars``
     Removes control characters if the source does not contain any.
+``weblate.trans.autofixes.chars.DevanagariDanda``
+    Replaces sentence full stop in Bangla by the devanagari danda character.
 ``weblate.trans.autofixes.html.BleachHTML``
     Removes unsafe HTML markup from strings flagged as ``safe-html`` (see :ref:`check-safe-html`).
 
@@ -222,16 +245,16 @@ BASIC_LANGUAGES
 
 .. versionadded:: 4.4
 
-List of languages to offer users for starting new translation. When not
-specified built-in list is used which includes all commonly used languages, but
-without country specific variants.
+List of languages to offer users for starting a new translation. When not
+specified, a built-in list is used (which includes all commonly used languages, but
+without country specific variants).
 
-This only limits non privileged users to add unwanted languages. The project
-admins are still presented with full selection of languages defined in Weblate.
+This only limits non privileged users to add unwanted languages. Project
+admins are still presented with the full selection of languages defined in Weblate.
 
 .. note::
 
-   This does not define new languages for Weblate, it only filters existing ones
+   This does not define new languages for Weblate — it only filters existing ones
    in the database.
 
 **Example:**
@@ -264,16 +287,43 @@ You can pass additional arguments to :command:`borg create` when built-in backup
    :ref:`backup`,
    :doc:`borg:usage/create`
 
+.. setting:: CACHE_DIR
+
+CACHE_DIR
+---------
+
+.. versionadded:: 4.16
+
+Directory where Weblate stores cache files. Defaults to :file:`cache` subfolder
+in :setting:`DATA_DIR`.
+
+Change this to local or temporary filesystem if :setting:`DATA_DIR` is on a
+network filesystem.
+
+The Docker container uses a separate volume for this, see :ref:`docker-volume`.
+
+The following subdirectories usually exist:
+
+:file:`fonts`
+   :program:`font-config` cache for :ref:`fonts`.
+:file:`avatar`
+   Cached user avatars, see :ref:`avatars`.
+:file:`static`
+   Default location for static Django files, specified by :setting:`django:STATIC_ROOT`. See :ref:`static-files`.
+:file:`tesseract`
+   OCR trained data for :ref:`screenshots`.
+
 .. setting:: CSP_SCRIPT_SRC
 .. setting:: CSP_IMG_SRC
 .. setting:: CSP_CONNECT_SRC
 .. setting:: CSP_STYLE_SRC
 .. setting:: CSP_FONT_SRC
+.. setting:: CSP_FORM_SRC
 
-CSP_SCRIPT_SRC, CSP_IMG_SRC, CSP_CONNECT_SRC, CSP_STYLE_SRC, CSP_FONT_SRC
--------------------------------------------------------------------------
+CSP_SCRIPT_SRC, CSP_IMG_SRC, CSP_CONNECT_SRC, CSP_STYLE_SRC, CSP_FONT_SRC, CSP_FORM_SRC
+---------------------------------------------------------------------------------------
 
-Customize ``Content-Security-Policy`` header for Weblate. The header is
+Customize :http:header:`Content-Security-Policy` header for Weblate. The header is
 automatically generated based on enabled integrations with third-party services
 (Matomo, Google Analytics, Sentry, …).
 
@@ -307,7 +357,7 @@ Adjust the list of checks to include ones relevant to you.
 
 All built-in :ref:`checks` are turned on by default, from
 where you can change these settings. By default they are commented out in :ref:`sample-configuration`
-so that default values are used. New checks then carried out for each new Weblate version.
+so that default values are used. New checks are then carried out for each new Weblate version.
 
 You can turn off all checks:
 
@@ -327,9 +377,9 @@ You can turn on only a few:
 
 .. note::
 
-    Changing this setting only affects newly changed translations, existing checks
+    Changing this setting only affects newly changed translations. Existing checks
     will still be stored in the database. To also apply changes to the stored translations, run
-    :djadmin:`updatechecks`.
+    :wladmin:`updatechecks`.
 
 .. seealso::
 
@@ -340,8 +390,6 @@ You can turn on only a few:
 COMMENT_CLEANUP_DAYS
 --------------------
 
-.. versionadded:: 3.6
-
 Delete comments after a given number of days.
 Defaults to ``None``, meaning no deletion at all.
 
@@ -350,8 +398,6 @@ Defaults to ``None``, meaning no deletion at all.
 COMMIT_PENDING_HOURS
 --------------------
 
-.. versionadded:: 2.10
-
 Number of hours between committing pending changes by way of the background task.
 
 .. seealso::
@@ -359,7 +405,7 @@ Number of hours between committing pending changes by way of the background task
    :ref:`component`,
    :ref:`component-commit_pending_age`,
    :ref:`production-cron`,
-   :djadmin:`commit_pending`
+   :wladmin:`commit_pending`
 
 
 .. setting:: CONTACT_FORM
@@ -369,14 +415,19 @@ CONTACT_FORM
 
 .. versionadded:: 4.6
 
-Configures how e-mail from the contact form is being sent. Choose a
-configuration that matches your mail server configuration.
+Configures how e-mail from the contact form is being sent.
+Choose a configuration that matches the configuration of your mail server.
 
 ``"reply-to"``
    The sender is used in as :mailheader:`Reply-To`, this is the default behaviour.
 ``"from"``
    The sender is used in as :mailheader:`From`. Your mail server needs to allow
    sending such e-mails.
+
+
+.. seealso::
+
+   :setting:`ADMINS_CONTACT`
 
 .. setting:: DATA_DIR
 
@@ -392,24 +443,22 @@ The following subdirectories usually exist:
     Home directory used for invoking scripts.
 :file:`ssh`
     SSH keys and configuration.
-:file:`static`
-    Default location for static Django files, specified by :setting:`django:STATIC_ROOT`. See :ref:`static-files`.
-
-    The Docker container uses a separate volume for this, see :ref:`docker-volume`.
 :file:`media`
     Default location for Django media files, specified by :setting:`django:MEDIA_ROOT`. Contains uploaded screenshots, see :ref:`screenshots`.
 :file:`vcs`
-    Version control repositories for translations.
+    Version-control repositories for translations.
 :file:`backups`
-    Daily backup data, please check :ref:`backup-dumps` for details.
-:file:`celery`
-    Celery scheduler data, see :ref:`celery`.
+    Daily backup data. Please check :ref:`backup-dumps` for details.
 :file:`fonts`:
-    User-uploaded  fonts, see :ref:`fonts`.
+    User-uploaded fonts, see :ref:`fonts`.
+:file:`cache`
+    Various caches. Can be placed elsewhere using :setting:`CACHE_DIR`.
+
+    The Docker container uses a separate volume for this, see :ref:`docker-volume`.
 
 .. note::
 
-    This directory has to be writable by Weblate. Running it as uWSGI means
+    This directory has to be writable by Weblate. Running it as WSGI means
     the ``www-data`` user should have write access to it.
 
     The easiest way to achieve this is to make the user the owner of the directory:
@@ -423,14 +472,13 @@ Defaults to ``/home/weblate/data``, but it is expected to be configured.
 .. seealso::
 
     :ref:`file-permissions`,
-    :doc:`backup`
+    :doc:`backup`,
+    :setting:`CACHE_DIR`
 
 .. setting:: DATABASE_BACKUP
 
 DATABASE_BACKUP
 ---------------
-
-.. versionadded:: 3.1
 
 Whether the database backups should be stored as plain text, compressed or skipped.
 The authorized values are:
@@ -448,9 +496,7 @@ The authorized values are:
 DEFAULT_ACCESS_CONTROL
 ----------------------
 
-.. versionadded:: 3.3
-
-The default access control setting for new projects:
+The default access-control setting for new projects:
 
 ``0``
    :guilabel:`Public`
@@ -521,7 +567,7 @@ Default commit messages for different operations, please check :ref:`component` 
 DEFAULT_ADDONS
 --------------
 
-Default add-ons to install on every created component.
+Default add-ons to install for every created component.
 
 .. note::
 
@@ -547,7 +593,7 @@ Example:
 
 .. seealso::
 
-   :djadmin:`install_addon`,
+   :wladmin:`install_addon`,
    :doc:`addons`,
    :setting:`WEBLATE_ADDONS`
 
@@ -556,9 +602,7 @@ Example:
 DEFAULT_COMMITER_EMAIL
 ----------------------
 
-.. versionadded:: 2.4
-
-Committer e-mail address defaulting to ``noreply@weblate.org``.
+Committer e-mail address, defaulting to ``noreply@weblate.org``.
 
 .. seealso::
 
@@ -569,9 +613,7 @@ Committer e-mail address defaulting to ``noreply@weblate.org``.
 DEFAULT_COMMITER_NAME
 ---------------------
 
-.. versionadded:: 2.4
-
-Committer name defaulting to ``Weblate``.
+Committer name, defaulting to ``Weblate``.
 
 .. seealso::
 
@@ -584,7 +626,7 @@ DEFAULT_LANGUAGE
 
 .. versionadded:: 4.3.2
 
-Default source language to use for example in :ref:`component-source_language`.
+:ref:`component-source_language` for any new components.
 
 Defaults to `en`. The matching language object needs to exist in the database.
 
@@ -598,9 +640,7 @@ Defaults to `en`. The matching language object needs to exist in the database.
 DEFAULT_MERGE_STYLE
 -------------------
 
-.. versionadded:: 3.4
-
-Merge style for any new components.
+:ref:`component-merge_style` for any new components.
 
 * `rebase` - default
 * `merge`
@@ -615,16 +655,12 @@ Merge style for any new components.
 DEFAULT_SHARED_TM
 -----------------
 
-.. versionadded:: 3.2
-
-Configures default value of :ref:`project-use_shared_tm` and :ref:`project-contribute_shared_tm`.
+Configures the default value of :ref:`project-use_shared_tm` and :ref:`project-contribute_shared_tm`.
 
 .. setting:: DEFAULT_TRANSLATION_PROPAGATION
 
 DEFAULT_TRANSLATION_PROPAGATION
 -------------------------------
-
-.. versionadded:: 2.5
 
 Default setting for translation propagation, defaults to ``True``.
 
@@ -647,7 +683,7 @@ Configures the default title and message for pull requests.
 ENABLE_AVATARS
 --------------
 
-Whether to turn on Gravatar-based avatars for users. By default this is on.
+Whether to turn on Gravatar-based avatars for users. On by default.
 
 Avatars are fetched and cached on the server, lowering the risk of
 leaking private info, speeding up the user experience.
@@ -663,7 +699,7 @@ leaking private info, speeding up the user experience.
 ENABLE_HOOKS
 ------------
 
-Whether to enable anonymous remote hooks.
+Whether to turn on anonymous remote hooks.
 
 .. seealso::
 
@@ -674,19 +710,28 @@ Whether to enable anonymous remote hooks.
 ENABLE_HTTPS
 ------------
 
+.. versionchanged:: 5.7
+
+   Weblate now requires https for WebAuthn support.
+
 Whether to send links to Weblate as HTTPS or HTTP. This setting affects sent
 e-mails and generated absolute URLs.
 
 In the default configuration this is also used for several Django settings
-related to HTTPS - it enables secure cookies, toggles HSTS or enables
-redirection to HTTPS URL.
+related to HTTPS — it enables secure cookies, toggles HSTS or enables
+redirection to a HTTPS URL.
 
 The HTTPS redirection might be problematic in some cases and you might hit
-issue with infinite redirection in case you are using a reverse proxy doing SSL
-termination which does not correctly pass protocol headers to Django. Please
-tweak your reverse proxy configuration to emit ``X-Forwarded-Proto`` or
-``Forwarded`` headers or configure :setting:`django:SECURE_PROXY_SSL_HEADER` to
+an issue with infinite redirection in case you are using a reverse proxy doing
+an SSL termination which does not correctly pass protocol headers to Django.
+Please tweak your reverse proxy configuration to emit :http:header:`X-Forwarded-Proto` or
+:http:header:`Forwarded` headers or configure :setting:`django:SECURE_PROXY_SSL_HEADER` to
 let Django correctly detect the SSL status.
+
+In case this is disabled, Weblate will fail to start with an
+``otp_webauthn.E031`` error. You can silence this error by adding it to
+:setting:`django:SILENCED_SYSTEM_CHECKS`, but still WebAuthn will not work for
+sites without HTTPS.
 
 .. seealso::
 
@@ -702,6 +747,23 @@ ENABLE_SHARING
 --------------
 
 Turn on/off the :guilabel:`Share` menu so users can share translation progress on social networks.
+
+.. setting:: EXTRA_HTML_HEAD
+
+EXTRA_HTML_HEAD
+---------------
+
+.. versionadded:: 4.15
+
+Insert additional markup into the HTML header. Can be used for verification of site ownership, for example:
+
+.. code-block:: python
+
+   EXTRA_HTML_HEAD = '<link href="https://fosstodon.org/@weblate" rel="me">'
+
+.. warning::
+
+   No sanitization is performed on the string. It is inserted as-is into the HTML header.
 
 .. setting:: GET_HELP_URL
 
@@ -721,11 +783,6 @@ GITEA_CREDENTIALS
 
 List for credentials for Gitea servers.
 
-.. hint::
-
-    Use this in case you want Weblate to interact with more of them, for single
-    Gitea endpoint stick with :setting:`GITEA_USERNAME` and :setting:`GITEA_TOKEN`.
-
 .. code-block:: python
 
     GITEA_CREDENTIALS = {
@@ -733,39 +790,12 @@ List for credentials for Gitea servers.
             "username": "weblate",
             "token": "your-api-token",
         },
-        "gitea.example.com": {
-            "username": "weblate",
-            "token": "another-api-token",
-        },
     }
 
-.. setting:: GITEA_USERNAME
-
-GITEA_USERNAME
---------------
-
-.. versionadded:: 4.12
-
-Gitea username used to send pull requests for translation updates.
+.. include:: /snippets/vcs-credentials.rst
 
 .. seealso::
 
-   :setting:`GITEA_CREDENTIALS`,
-   :ref:`vcs-gitea`
-
-.. setting:: GITEA_TOKEN
-
-GITEA_TOKEN
------------
-
-.. versionadded:: 4.12
-
-Gitea personal access token used to make API calls to send pull requests for
-translation updates.
-
-.. seealso::
-
-   :setting:`GITEA_CREDENTIALS`,
    :ref:`vcs-gitea`,
    `Creating a Gitea personal access token`_
 
@@ -780,11 +810,6 @@ GITLAB_CREDENTIALS
 
 List for credentials for GitLab servers.
 
-.. hint::
-
-    Use this in case you want Weblate to interact with more of them, for single
-    GitLab endpoint stick with :setting:`GITLAB_USERNAME` and :setting:`GITLAB_TOKEN`.
-
 .. code-block:: python
 
     GITLAB_CREDENTIALS = {
@@ -792,38 +817,12 @@ List for credentials for GitLab servers.
             "username": "weblate",
             "token": "your-api-token",
         },
-        "gitlab.example.com": {
-            "username": "weblate",
-            "token": "another-api-token",
-        },
     }
 
-
-.. setting:: GITLAB_USERNAME
-
-GITLAB_USERNAME
----------------
-
-GitLab username used to send merge requests for translation updates.
+.. include:: /snippets/vcs-credentials.rst
 
 .. seealso::
 
-   :setting:`GITLAB_CREDENTIALS`,
-   :ref:`vcs-gitlab`
-
-.. setting:: GITLAB_TOKEN
-
-GITLAB_TOKEN
-------------
-
-.. versionadded:: 4.3
-
-GitLab personal access token used to make API calls to send merge requests for
-translation updates.
-
-.. seealso::
-
-   :setting:`GITLAB_CREDENTIALS`,
    :ref:`vcs-gitlab`,
    `GitLab: Personal access token <https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html>`_
 
@@ -836,11 +835,6 @@ GITHUB_CREDENTIALS
 
 List for credentials for GitHub servers.
 
-.. hint::
-
-    Use this in case you want Weblate to interact with more of them, for single
-    GitHub endpoint stick with :setting:`GITHUB_USERNAME` and :setting:`GITHUB_TOKEN`.
-
 .. code-block:: python
 
     GITHUB_CREDENTIALS = {
@@ -848,41 +842,135 @@ List for credentials for GitHub servers.
             "username": "weblate",
             "token": "your-api-token",
         },
-        "github.example.com": {
-            "username": "weblate",
-            "token": "another-api-token",
-        },
     }
 
-.. setting:: GITHUB_USERNAME
+.. note::
 
-GITHUB_USERNAME
----------------
+   When creating a fine-grained personal access token, grant read and write
+   access to :guilabel:`Contents` and :guilabel:`Pull requests`.
 
-GitHub username used to send pull requests for translation updates.
+   :guilabel:`Administration` might also be necessary for forking a repository
+   if you intend to use forking and the original repository is not public.
 
-.. seealso::
+.. hint::
 
-   :setting:`GITHUB_CREDENTIALS`,
-   :ref:`vcs-github`
+   Use ``api.github.com`` as a API host for https://github.com/.
 
-.. setting:: GITHUB_TOKEN
-
-GITHUB_TOKEN
-------------
-
-.. versionadded:: 4.3
-
-GitHub personal access token used to make API calls to send pull requests for
-translation updates.
+.. include:: /snippets/vcs-credentials.rst
 
 .. seealso::
 
-   :setting:`GITHUB_CREDENTIALS`,
    :ref:`vcs-github`,
    `Creating a GitHub personal access token`_
 
 .. _Creating a GitHub personal access token: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
+
+.. setting:: BITBUCKETSERVER_CREDENTIALS
+
+BITBUCKETSERVER_CREDENTIALS
+---------------------------
+
+.. versionadded:: 4.16
+
+List for credentials for Bitbucket Data Center.
+
+.. code-block:: python
+
+    BITBUCKETSERVER_CREDENTIALS = {
+        "git.self-hosted.com": {
+            "username": "weblate",
+            "token": "http-access-token",
+        },
+    }
+
+.. include:: /snippets/vcs-credentials.rst
+
+.. seealso::
+
+   :ref:`vcs-bitbucket-server`,
+   `Bitbucket: HTTP access token <https://confluence.atlassian.com/bitbucketserver/http-access-tokens-939515499.html>`_
+
+.. setting:: BITBUCKETCLOUD_CREDENTIALS
+
+BITBUCKETCLOUD_CREDENTIALS
+---------------------------
+
+.. versionadded:: 5.8
+
+List for credentials for Bitbucket Cloud servers.
+
+.. code-block:: python
+
+    BITBUCKETCLOUD_CREDENTIALS = {
+        "bitbucket.org": {
+            "username": "your-username",
+            "workspace": "your-workspace-slug",
+            "token": "your-app-password",
+        },
+    }
+
+The configuration dictionary consists of credentials defined for each API host.
+The API host might be different from what you use in the web browser, for
+example GitHub API is accessed as ``api.github.com``.
+
+The following configuration is available for each host:
+
+``username``
+    API user.
+``workspace``
+    The user workspace slug.
+``token``
+    The App password with `pullrequest:write` permission.
+
+Additional settings not described here can be found at :ref:`settings-credentials`.
+
+.. seealso::
+
+   :ref:`vcs-bitbucket-cloud`,
+   `Create an App password <https://support.atlassian.com/bitbucket-cloud/docs/create-an-app-password/>`_,
+   `App password permissions <https://support.atlassian.com/bitbucket-cloud/docs/app-password-permissions/>`_
+
+.. setting:: AZURE_DEVOPS_CREDENTIALS
+
+AZURE_DEVOPS_CREDENTIALS
+------------------------
+
+.. versionadded:: 5.2
+
+List for credentials for Azure DevOps servers.
+
+.. code-block:: python
+
+    AZURE_DEVOPS_CREDENTIALS = {
+        "dev.azure.com": {
+            "username": "project-name",
+            "token": "your-api-token",
+            "organization": "organization-name",
+        },
+    }
+
+The configuration dictionary consists of credentials defined for each API host.
+The API host might be different from what you use in the web browser, for
+example GitHub API is accessed as ``api.github.com``.
+
+The following configuration is available for each host:
+
+``username``
+   The name of the Azure DevOps project. This is not the repository name.
+``organization``
+    The name of the organization of the project.
+``workItemIds``
+    An optional list of work items IDs from your organization. When provided
+    new pull requests will have these attached.
+``token``
+   API token for the API user, required.
+
+Additional settings not described here can be found at :ref:`settings-credentials`.
+
+.. seealso::
+
+   :ref:`vcs-azure-devops`,
+   `Azure DevOps: Personal access token <https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows>`_
 
 .. setting:: GOOGLE_ANALYTICS_ID
 
@@ -906,7 +994,7 @@ error messages too in a similar manner.
 
 .. note::
 
-    This is turned on by default.
+    On by default.
 
 .. setting:: HIDE_VERSION
 
@@ -915,12 +1003,12 @@ HIDE_VERSION
 
 .. versionadded:: 4.3.1
 
-Hides version information from unauthenticated users. This also makes all
-documentation links point to latest version instead of the documentation
-matching currently installed version.
+Hides version info from unauthenticated users. This also makes all
+documentation links point to the latest version instead of the documentation
+matching the currently installed version.
 
-Hiding version is recommended security practice in some corporations, but it
-doesn't prevent attacker to figure out version by probing the behavior.
+Hiding the version is a recommended security practice in some corporations,
+does not prevent an attacker from figuring out version by probing behavior.
 
 .. note::
 
@@ -949,8 +1037,6 @@ Please check <https://webmonetization.org/> for more details.
 IP_BEHIND_REVERSE_PROXY
 -----------------------
 
-.. versionadded:: 2.14
-
 Indicates whether Weblate is running behind a reverse proxy.
 
 If set to ``True``, Weblate gets IP address from a header defined by
@@ -977,8 +1063,6 @@ If set to ``True``, Weblate gets IP address from a header defined by
 IP_PROXY_HEADER
 ---------------
 
-.. versionadded:: 2.14
-
 Indicates which header Weblate should obtain the IP address from when
 :setting:`IP_BEHIND_REVERSE_PROXY` is turned on.
 
@@ -997,21 +1081,24 @@ Defaults to ``HTTP_X_FORWARDED_FOR``.
 IP_PROXY_OFFSET
 ---------------
 
-.. versionadded:: 2.14
+.. versionchanged:: 5.0.1
+
+    The default changed from 1 to -1.
 
 Indicates which part of :setting:`IP_PROXY_HEADER` is used as client IP
 address.
 
 Depending on your setup, this header might consist of several IP addresses,
-(for example ``X-Forwarded-For: a, b, client-ip``) and you can configure
+(for example ``X-Forwarded-For: client-ip, proxy-a, proxy-b``) and you can configure
 which address from the header is used as client IP address here.
 
 .. warning::
 
-   Setting this affects the security of your installation, you should only
-   configure it to use trusted proxies for determining IP address.
+   Setting this affects the security of your installation. You should only
+   configure it to use trusted proxies for determining the IP address.
+   Please check <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For#security_and_privacy_concerns> for more details.
 
-Defaults to 0.
+Defaults to -1.
 
 .. seealso::
 
@@ -1021,19 +1108,37 @@ Defaults to 0.
     :setting:`IP_BEHIND_REVERSE_PROXY`,
     :setting:`IP_PROXY_HEADER`
 
+.. setting:: LEGAL_TOS_DATE
+
+LEGAL_TOS_DATE
+--------------
+
+.. versionadded:: 4.15
+
+.. note::
+
+   You need :ref:`legal` installed to make this work.
+
+Date of last update of terms of service documents. Whenever the date changes,
+users are required to agree with the updated terms of service.
+
+.. code-block:: python
+
+   from datetime import date
+
+   LEGAL_TOS_DATE = date(2022, 2, 2)
+
 .. setting:: LEGAL_URL
 
 LEGAL_URL
 ---------
 
-.. versionadded:: 3.5
-
 URL where your Weblate instance shows its legal documents.
 
 .. hint::
 
-    Useful if you host your legal documents outside Weblate for embedding them inside Weblate,
-    please check :ref:`legal` for details.
+    Useful if you host your legal documents outside Weblate for embedding them inside Weblate.
+    Please check :ref:`legal` for details.
 
 Example:
 
@@ -1178,21 +1283,9 @@ LOGIN_REQUIRED_URLS_EXCEPTIONS
 ------------------------------
 
 List of exceptions for :setting:`LOGIN_REQUIRED_URLS`.
-If not specified, users are allowed to access the sign in page.
+If not specified, users are allowed to access the sign-in page.
 
-Some of exceptions you might want to include:
-
-.. code-block:: python
-
-    LOGIN_REQUIRED_URLS_EXCEPTIONS = (
-        r"/accounts/(.*)$",  # Required for sign in
-        r"/static/(.*)$",  # Required for development mode
-        r"/widgets/(.*)$",  # Allowing public access to widgets
-        r"/data/(.*)$",  # Allowing public access to data exports
-        r"/hooks/(.*)$",  # Allowing public access to notification hooks
-        r"/api/(.*)$",  # Allowing access to API
-        r"/js/i18n/$",  # JavaScript localization
-    )
+See the :ref:`sample-configuration` for recommended configuration of this setting.
 
 .. setting:: PIWIK_SITE_ID
 .. setting:: MATOMO_SITE_ID
@@ -1200,7 +1293,7 @@ Some of exceptions you might want to include:
 MATOMO_SITE_ID
 --------------
 
-ID of a site in Matomo (formerly Piwik) you want to track.
+ID of the site in Matomo (formerly Piwik) you want to use for tracking Weblate.
 
 .. note::
 
@@ -1239,7 +1332,9 @@ For example:
 NEARBY_MESSAGES
 ---------------
 
-How many strings to show around the currently translated string. This is just a default value, users can adjust this in :ref:`user-profile`.
+Number of nearby strings to show in each direction in the full editor.
+
+This is just a default value, users can adjust this in :ref:`user-profile`.
 
 .. setting:: DEFAULT_PAGE_LIMIT
 
@@ -1259,11 +1354,6 @@ PAGURE_CREDENTIALS
 
 List for credentials for Pagure servers.
 
-.. hint::
-
-    Use this in case you want Weblate to interact with more of them, for single
-    Pagure endpoint stick with :setting:`PAGURE_USERNAME` and :setting:`PAGURE_TOKEN`.
-
 .. code-block:: python
 
     PAGURE_CREDENTIALS = {
@@ -1271,39 +1361,12 @@ List for credentials for Pagure servers.
             "username": "weblate",
             "token": "your-api-token",
         },
-        "pagure.example.com": {
-            "username": "weblate",
-            "token": "another-api-token",
-        },
     }
 
-.. setting:: PAGURE_USERNAME
-
-PAGURE_USERNAME
----------------
-
-.. versionadded:: 4.3.2
-
-Pagure username used to send merge requests for translation updates.
+.. include:: /snippets/vcs-credentials.rst
 
 .. seealso::
 
-   :setting:`PAGURE_CREDENTIALS`,
-   :ref:`vcs-pagure`
-
-.. setting:: PAGURE_TOKEN
-
-PAGURE_TOKEN
-------------
-
-.. versionadded:: 4.3.2
-
-Pagure personal access token used to make API calls to send merge requests for
-translation updates.
-
-.. seealso::
-
-   :setting:`PAGURE_CREDENTIALS`,
    :ref:`vcs-pagure`,
    `Pagure API <https://pagure.io/api/0/>`_
 
@@ -1332,6 +1395,41 @@ Example:
 
    :setting:`LEGAL_URL`
 
+.. setting:: PRIVATE_COMMIT_EMAIL_OPT_IN
+
+PRIVATE_COMMIT_EMAIL_OPT_IN
+---------------------------
+
+.. versionadded:: 4.15
+
+Configures whether the private commit e-mail is opt-in or opt-out (by default it is opt-in).
+
+.. hint::
+
+   This setting only applies to users which have not explicitly chosen a commit e-mail.
+
+.. seealso::
+
+   :ref:`profile`,
+   :setting:`PRIVATE_COMMIT_EMAIL_TEMPLATE`
+
+.. setting:: PRIVATE_COMMIT_EMAIL_TEMPLATE
+
+PRIVATE_COMMIT_EMAIL_TEMPLATE
+-----------------------------
+
+.. versionadded:: 4.15
+
+Template to generate private commit e-mail for an user. Defaults to ``"{username}@users.noreply.{site_domain}"``.
+
+Set to blank string to disable.
+
+.. note::
+
+   Using different commit e-mail is opt-in for users unless configured by
+   :setting:`PRIVATE_COMMIT_EMAIL_OPT_IN`. Users can configure commit e-mail in
+   the :ref:`profile`.
+
 .. setting:: PROJECT_BACKUP_KEEP_COUNT
 
 PROJECT_BACKUP_KEEP_COUNT
@@ -1339,7 +1437,7 @@ PROJECT_BACKUP_KEEP_COUNT
 
 .. versionadded:: 4.14
 
-Defines how many backups per project are kept on the server. It defaults to 3.
+Defines how many backups per project are kept on the server. Defaults to 3.
 
 .. seealso::
 
@@ -1358,12 +1456,78 @@ Defines how long the project backups will be kept on the server. Defaults to 30 
 
    :ref:`projectbackup`
 
+.. setting:: PROJECT_NAME_RESTRICT_RE
+
+PROJECT_NAME_RESTRICT_RE
+------------------------
+
+.. versionadded:: 4.15
+
+Defines a regular expression to restrict project naming. Any matching names will be rejected.
+
+.. seealso::
+
+   :ref:`project-name`
+
+.. setting:: PROJECT_WEB_RESTRICT_HOST
+
+PROJECT_WEB_RESTRICT_HOST
+-------------------------
+
+.. versionadded:: 4.16.2
+
+Reject using certain hosts in project website. Any subdomain is matched, so
+including ``example.com`` will block ``test.example.com`` as well. The list
+should contain lower case strings only, the parsed domain is lower cased before
+matching.
+
+Default configuration:
+
+.. code-block:: python
+
+   PROJECT_WEB_RESTRICT_HOST = {"localhost"}
+
+.. seealso::
+
+   :ref:`project-web`
+   :setting:`PROJECT_WEB_RESTRICT_NUMERIC`,
+   :setting:`PROJECT_WEB_RESTRICT_RE`,
+
+
+.. setting:: PROJECT_WEB_RESTRICT_NUMERIC
+
+PROJECT_WEB_RESTRICT_NUMERIC
+----------------------------
+
+.. versionadded:: 4.16.2
+
+Reject using numeric IP address in project website. On by default.
+
+.. seealso::
+
+   :ref:`project-web`
+   :setting:`PROJECT_WEB_RESTRICT_HOST`,
+   :setting:`PROJECT_WEB_RESTRICT_RE`,
+
+.. setting:: PROJECT_WEB_RESTRICT_RE
+
+PROJECT_WEB_RESTRICT_RE
+-----------------------
+
+.. versionadded:: 4.15
+
+Defines a regular expression to limit what can be entered as :ref:`project-web`. Any matching URLs will be rejected.
+
+.. seealso::
+
+   :ref:`project-web`
+   :setting:`PROJECT_WEB_RESTRICT_HOST`,
+   :setting:`PROJECT_WEB_RESTRICT_NUMERIC`
+
 .. setting:: RATELIMIT_ATTEMPTS
 
 RATELIMIT_ATTEMPTS
 ------------------
-
-.. versionadded:: 3.2
 
 Maximum number of authentication attempts before rate limiting is applied.
 
@@ -1380,11 +1544,9 @@ Defaults to 5.
 RATELIMIT_WINDOW
 ----------------
 
-.. versionadded:: 3.2
-
 How long authentication is accepted after rate limiting applies.
 
-An amount of seconds defaulting to 300 (5 minutes).
+An amount of seconds, defaulting to 300 (5 minutes).
 
 .. seealso::
 
@@ -1396,8 +1558,6 @@ An amount of seconds defaulting to 300 (5 minutes).
 
 RATELIMIT_LOCKOUT
 -----------------
-
-.. versionadded:: 3.2
 
 How long authentication is locked after rate limiting applies.
 
@@ -1420,7 +1580,7 @@ List of authentication backends to allow registration from. This only limits
 new registrations, users can still authenticate and add authentication using
 all configured authentication backends.
 
-It is recommended to keep :setting:`REGISTRATION_OPEN` enabled while limiting
+It is recommended to keep :setting:`REGISTRATION_OPEN` on while limiting
 registration backends, otherwise users will be able to register, but Weblate
 will not show links to register in the user interface.
 
@@ -1432,7 +1592,7 @@ Example:
 
 .. hint::
 
-   The backend names match names used in URL for authentication.
+   The backend names match names used in the URL for authentication.
 
 .. seealso::
 
@@ -1444,9 +1604,7 @@ Example:
 REGISTRATION_CAPTCHA
 --------------------
 
-A value of either ``True`` or ``False`` indicating whether registration of new
-accounts is protected by CAPTCHA. This setting is optional, and a default of
-``True`` will be assumed if it is not supplied.
+Whether registration of new accounts is protected by a CAPTCHA. Defaults to enabled.
 
 If turned on, a CAPTCHA is added to all pages where a users enters their e-mail address:
 
@@ -1455,12 +1613,15 @@ If turned on, a CAPTCHA is added to all pages where a users enters their e-mail 
 * Adding e-mail to an account.
 * Contact form for users that are not signed in.
 
+The protection currently consists of following steps:
+
+* Mathematical captcha to be solved by the user.
+* Proof of work challenge calculated by the browser. The difficulty can be adjusted using :setting:`ALTCHA_MAX_NUMBER`.
+
 .. setting:: REGISTRATION_EMAIL_MATCH
 
 REGISTRATION_EMAIL_MATCH
 ------------------------
-
-.. versionadded:: 2.17
 
 Allows you to filter which e-mail addresses can register.
 
@@ -1478,7 +1639,7 @@ REGISTRATION_OPEN
 -----------------
 
 Whether registration of new accounts is currently permitted.
-This optional setting can remain the default ``True``, or changed to ``False``.
+Defaults to enabled.
 
 This setting affects built-in authentication by e-mail address or through the
 Python Social Auth (you can whitelist certain back-ends using
@@ -1495,6 +1656,22 @@ Python Social Auth (you can whitelist certain back-ends using
     :setting:`REGISTRATION_ALLOW_BACKENDS`,
     :setting:`REGISTRATION_EMAIL_MATCH`,
     :doc:`auth`
+
+.. setting:: REGISTRATION_REBIND
+
+REGISTRATION_REBIND
+-------------------
+
+.. versionadded:: 4.16
+
+Allow rebinding authentication backends for existing users. Turn this on when
+migrating between authentication providers.
+
+.. note::
+
+   Off by default to not allow adding other authentication backends to
+   an existing account. Rebinding can lead to account compromise when using
+   more third-party authentication backends.
 
 .. setting:: REPOSITORY_ALERT_THRESHOLD
 
@@ -1530,13 +1707,51 @@ require authentication for all API endpoints.
 SENTRY_DSN
 ----------
 
-.. versionadded:: 3.9
-
 Sentry DSN to use for :ref:`collecting-errors`.
 
 .. seealso::
 
-   `Django integration for Sentry <https://docs.sentry.io/platforms/python/guides/django/>`_
+   `Django integration for Sentry <https://docs.sentry.io/platforms/python/integrations/django/>`_
+
+.. setting:: SENTRY_ENVIRONMENT
+
+SENTRY_ENVIRONMENT
+------------------
+
+Configures environment for Sentry. Defaults to ``devel``.
+
+.. setting:: SENTRY_PROFILES_SAMPLE_RATE
+
+SENTRY_PROFILES_SAMPLE_RATE
+---------------------------
+
+Configure sampling rate for performance monitoring. Set to 1 to trace all events, 0 (the default) disables tracing.
+
+.. seealso::
+
+   `Sentry Performance Monitoring <https://docs.sentry.io/product/performance/>`_
+
+.. setting:: SENTRY_SEND_PII
+
+SENTRY_SEND_PII
+---------------
+
+Allow Sentry to collect certain personally identifiable information. Turned off by default.
+
+.. versionchanged:: 5.7
+
+   This is turned off by default now, used to be turned on by default.
+
+.. setting:: SENTRY_TRACES_SAMPLE_RATE
+
+SENTRY_TRACES_SAMPLE_RATE
+-------------------------
+
+Configure sampling rate for profiling monitoring. Set to 1 to trace all events, 0 (the default) disables tracing.
+
+.. seealso::
+
+   `Sentry Profiling <https://docs.sentry.io/product/explore/profiling/>`_
 
 .. setting:: SESSION_COOKIE_AGE_AUTHENTICATED
 
@@ -1557,10 +1772,10 @@ Set session expiry for authenticated users. This complements
 SIMPLIFY_LANGUAGES
 ------------------
 
-Use simple language codes for default language/country combinations. For
-example an ``fr_FR`` translation will use the ``fr`` language code. This is usually
-the desired behavior, as it simplifies listing languages for these default
-combinations.
+Use simple language codes for default language/country combinations.
+For example an ``fr_FR`` translation will use the ``fr`` language code.
+This is usually the desired behavior, as it simplifies listing languages
+for these default combinations.
 
 Turn this off if you want to different translations for each variant.
 
@@ -1569,10 +1784,10 @@ Turn this off if you want to different translations for each variant.
 SITE_DOMAIN
 -----------
 
-Configures site domain. This is necessary to produce correct absolute links in
+Configures site domain. Necessary to produce correct absolute links in
 many scopes (for example activation e-mails, notifications or RSS feeds).
 
-In case Weblate is running on non-standard port, include it here as well.
+If Weblate is running on a non-standard port, include it here as well.
 
 **Examples:**
 
@@ -1587,8 +1802,8 @@ In case Weblate is running on non-standard port, include it here as well.
 .. note::
 
     This setting should only contain the domain name. For configuring protocol,
-    (enabling and enforcing HTTPS) use :setting:`ENABLE_HTTPS` and for changing
-    URL, use :setting:`URL_PREFIX`.
+    (turning on and enforcing HTTPS) use :setting:`ENABLE_HTTPS` and for changing
+    the URL, use :setting:`URL_PREFIX`.
 
 .. hint::
 
@@ -1628,17 +1843,10 @@ The default value is:
 SINGLE_PROJECT
 --------------
 
-.. versionadded:: 3.8
-
 Redirects users directly to a project or component instead of showing
-the dashboard. You can either set it to ``True`` and in this case it only works in
-case there is actually only single project in Weblate. Alternatively set
+the dashboard. You can either set it to ``True`` so it only works
+if there is actually only single project in Weblate. Alternatively, set
 the project slug, and it will redirect unconditionally to this project.
-
-.. versionchanged:: 3.11
-
-   The setting now also accepts a project slug, to force displaying that
-   single project.
 
 Example:
 
@@ -1653,11 +1861,11 @@ SSH_EXTRA_ARGS
 
 .. versionadded:: 4.9
 
-Allows to add custom parameters when Weblate is invoking SSH. This is useful
-when connecting to servers using legacy encryption or other non-standard features.
+Allows adding custom parameters when Weblate is invoking SSH.
+Useful when connecting to servers using legacy encryption or other non-standard features.
 
 For example when SSH connection in Weblate fails with `Unable to negotiate with legacyhost: no matching key exchange method found.
-Their offer: diffie-hellman-group1-sha1`, you can enable that using:
+Their offer: diffie-hellman-group1-sha1`, you can turn that on using:
 
 .. code-block:: python
 
@@ -1665,8 +1873,8 @@ Their offer: diffie-hellman-group1-sha1`, you can enable that using:
 
 .. hint::
 
-   The string is evaluated by shell, so make sure to quote any whitespace and
-   special characters.
+   The string is evaluated by the shell, so ensure any whitespace and
+   special characters is quoted.
 
 .. seealso::
 
@@ -1684,10 +1892,33 @@ The URL where your Weblate instance reports its status.
 SUGGESTION_CLEANUP_DAYS
 -----------------------
 
-.. versionadded:: 3.2.1
-
 Automatically deletes suggestions after a given number of days.
 Defaults to ``None``, meaning no deletions.
+
+.. setting:: SUPPORT_STATUS_CHECK
+
+SUPPORT_STATUS_CHECK
+--------------------
+
+.. versionadded:: 5.5
+
+Disables semiannual support status check and redirecting superusers upon login
+to the donation page in case there is no active support subscription.
+
+.. hint::
+
+   Improve your Weblate experience by purchasing a support subscription and boosting Weblate progress instead of turning this off.
+
+.. setting:: UNUSED_ALERT_DAYS
+
+UNUSED_ALERT_DAYS
+-----------------
+
+.. versionadded:: 4.17
+
+Configures when the :guilabel:`Component seems unused` alert is triggered.
+
+Defaults to 365 days, set to 0 to turn it off.
 
 .. setting:: UPDATE_LANGUAGES
 
@@ -1697,13 +1928,13 @@ UPDATE_LANGUAGES
 .. versionadded:: 4.3.2
 
 Controls whether languages database should be updated when running database
-migration and is enabled by default. This setting has no effect on invocation
-of :djadmin:`setuplang`.
+migration and is on by default. This setting has no effect on invocation
+of :wladmin:`setuplang`.
 
 .. warning::
 
    The languages display might become inconsistent with this. Weblate language
-   definitions extend over time and it will not display language code for
+   definitions expand over time and it will not display language code for
    the defined languages.
 
 .. seealso::
@@ -1738,6 +1969,23 @@ Example:
     This setting does not work with Django's built-in server, you would have to
     adjust :file:`urls.py` to contain this prefix.
 
+.. setting:: VCS_API_DELAY
+
+VCS_API_DELAY
+-------------
+
+.. versionadded:: 4.15.1
+
+Configures minimal delay in seconds between third-party API calls in
+:ref:`vcs-github`, :ref:`vcs-gitlab`, :ref:`vcs-gitea`, :ref:`vcs-pagure`, and
+:ref:`vcs-azure-devops`.
+
+This rate-limits API calls from Weblate to these services to avoid overloading them.
+
+If you are being limited by secondary rate-limiter at GitHub, increasing this might help.
+
+The default value is 10.
+
 .. setting:: VCS_BACKENDS
 
 VCS_BACKENDS
@@ -1765,8 +2013,6 @@ Configuration of available VCS backends.
 
 VCS_CLONE_DEPTH
 ---------------
-
-.. versionadded:: 3.10.2
 
 Configures how deep cloning of repositories Weblate should do.
 
@@ -1808,7 +2054,7 @@ example:
         "weblate.addons.gettext.GettextCustomizeAddon",
         "weblate.addons.gettext.GettextAuthorComments",
         "weblate.addons.cleanup.CleanupAddon",
-        "weblate.addons.consistency.LangaugeConsistencyAddon",
+        "weblate.addons.consistency.LanguageConsistencyAddon",
         "weblate.addons.discovery.DiscoveryAddon",
         "weblate.addons.flags.SourceEditAddon",
         "weblate.addons.flags.TargetEditAddon",
@@ -1816,6 +2062,7 @@ example:
         "weblate.addons.flags.BulkEditAddon",
         "weblate.addons.generate.GenerateFileAddon",
         "weblate.addons.json.JSONCustomizeAddon",
+        "weblate.addons.xml.XMLCustomizeAddon",
         "weblate.addons.properties.PropertiesSortAddon",
         "weblate.addons.git.GitSquashAddon",
         "weblate.addons.removal.RemoveComments",
@@ -1831,13 +2078,23 @@ example:
 .. note::
 
     Removing the add-on from the list does not uninstall it from the components.
-    Weblate will crash in that case. Please uninstall add-on from all components
+    Weblate will crash in that case. Please uninstall the add-on from all components
     prior to removing it from this list.
 
 .. seealso::
 
     :ref:`addons`,
-    :setting:`DEFAULT_ADDONS`
+    :setting:`DEFAULT_ADDONS`,
+    :setting:`ADDON_ACTIVITY_LOG_EXPIRY`
+
+.. setting:: ADDON_ACTIVITY_LOG_EXPIRY
+
+ADDON_ACTIVITY_LOG_EXPIRY
+-------------------------
+
+.. versionadded:: 5.6
+
+Configures how long activity logs for add-ons are kept. Defaults to 180 days.
 
 .. setting:: WEBLATE_EXPORTERS
 
@@ -1857,8 +2114,6 @@ or glossaries in various file formats.
 
 WEBLATE_FORMATS
 ---------------
-
-.. versionadded:: 3.0
 
 List of file formats available for use.
 
@@ -1889,8 +2144,6 @@ List of machinery services available for use.
 WEBLATE_GPG_IDENTITY
 --------------------
 
-.. versionadded:: 3.1
-
 Identity used by Weblate to sign Git commits, for example:
 
 .. code-block:: python
@@ -1911,4 +2164,43 @@ WEBSITE_REQUIRED
 ----------------
 
 Defines whether :ref:`project-web` has to be specified when creating a project.
-Turned on by default as that suits public server setups.
+On by default, as that suits public server setups.
+
+
+.. _settings-credentials:
+
+Configuring version control credentials
+---------------------------------------
+
+.. hint::
+
+   This section describes VCS credential variables as
+   :setting:`GITHUB_CREDENTIALS`, :setting:`GITLAB_CREDENTIALS`,
+   :setting:`GITEA_CREDENTIALS`, :setting:`PAGURE_CREDENTIALS`,
+   :setting:`BITBUCKETSERVER_CREDENTIALS`.
+
+The configuration dictionary consists of credentials defined for each API host.
+The API host might be different from what you use in the web browser, for
+example GitHub API is accessed as ``api.github.com``.
+
+The credentials can also be overridden in :ref:`component-push` or
+:ref:`component-repo` (if push URL is not configured), these take precedence
+over the ones specified in the configuration file.
+
+The following configuration is available for each host:
+
+``username``
+   API user, required.
+``token``
+   API token for the API user, required.
+``scheme``
+   .. versionadded:: 4.18
+
+   Scheme override. Weblate attempts to parse scheme from the repository URL
+   and falls backs to ``https``. If you are running the API server internally,
+   you might want to use ``http`` instead, but consider security.
+
+.. hint::
+
+   In the Docker container, the credentials can be configured using environment variables,
+   see :ref:`docker-vcs-config`.

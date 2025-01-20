@@ -1,39 +1,64 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+from pathlib import PurePath
 
 from django import forms
 from django.core.validators import FileExtensionValidator
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy
+
+from weblate.lang.models import Language
+from weblate.memory.models import SUPPORTED_FORMATS
+from weblate.utils.forms import SortedSelect
 
 
 class UploadForm(forms.Form):
     """Uploading file to a translation memory."""
 
     file = forms.FileField(
-        label=_("File"),
-        validators=[FileExtensionValidator(allowed_extensions=["json", "tmx"])],
-        help_text=_("You can upload a TMX or JSON file."),
+        label=gettext_lazy("File"),
+        validators=[FileExtensionValidator(allowed_extensions=SUPPORTED_FORMATS)],
+        help_text=gettext_lazy("You can upload a file of following formats: %s.")
+        % ", ".join(SUPPORTED_FORMATS),
     )
+    source_language = forms.ModelChoiceField(
+        widget=SortedSelect,
+        label=gettext_lazy("Source language"),
+        help_text=gettext_lazy(
+            "Source language of the document when not specified in file"
+        ),
+        queryset=Language.objects.all(),
+        required=False,
+    )
+    target_language = forms.ModelChoiceField(
+        widget=SortedSelect,
+        label=gettext_lazy("Target language"),
+        help_text=gettext_lazy(
+            "Target language of the document when not specified in file"
+        ),
+        queryset=Language.objects.all(),
+        required=False,
+    )
+
+    def clean(self):
+        data = self.cleaned_data
+        if "file" not in self.errors:
+            extension = PurePath(data["file"].name).suffix[1:].lower()
+            if extension in {"xliff", "po", "csv"} and not all(
+                [data["source_language"], data["target_language"]]
+            ):
+                raise forms.ValidationError(
+                    gettext_lazy(
+                        "Source language and target language must be specified for this file format."
+                    ),
+                    code="missing_languages",
+                )
+        return data
 
 
 class DeleteForm(forms.Form):
     confirm = forms.BooleanField(
-        label=_("Confirm deleting all translation memory entries"), required=True
+        label=gettext_lazy("Confirm deleting all translation memory entries"),
+        required=True,
     )

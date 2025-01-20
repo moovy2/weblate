@@ -1,26 +1,14 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+import django_otp_webauthn.views
 from django.conf import settings
 from django.urls import include, path
+from django.views.i18n import JavaScriptCatalog
 
 import weblate.accounts.views
+import weblate.auth.views
 from weblate.utils.urls import register_weblate_converters
 
 register_weblate_converters()
@@ -55,6 +43,35 @@ social_urls = [
     path("metadata/saml/", weblate.accounts.views.saml_metadata, name="saml-metadata"),
 ]
 
+# WebAuthn views, this is modified django_otp_webauth.urls
+webauthn_urls = [
+    path(
+        "registration/begin/",
+        django_otp_webauthn.views.BeginCredentialRegistrationView.as_view(),
+        name="credential-registration-begin",
+    ),
+    path(
+        "registration/complete/",
+        django_otp_webauthn.views.CompleteCredentialRegistrationView.as_view(),
+        name="credential-registration-complete",
+    ),
+    path(
+        "authentication/begin/",
+        weblate.accounts.views.WeblateBeginCredentialAuthenticationView.as_view(),
+        name="credential-authentication-begin",
+    ),
+    path(
+        "authentication/complete/",
+        weblate.accounts.views.WeblateCompleteCredentialAuthenticationView.as_view(),
+        name="credential-authentication-complete",
+    ),
+    path(
+        "jsi18n/",
+        JavaScriptCatalog.as_view(packages=["django_otp_webauthn"]),
+        name="js-i18n-catalog",
+    ),
+]
+
 urlpatterns = [
     path(
         "email-sent/",
@@ -69,29 +86,52 @@ urlpatterns = [
     path("userdata/", weblate.accounts.views.userdata, name="userdata"),
     path("unsubscribe/", weblate.accounts.views.unsubscribe, name="unsubscribe"),
     path("subscribe/", weblate.accounts.views.subscribe, name="subscribe"),
-    path("watch/<name:project>/", weblate.accounts.views.watch, name="watch"),
-    path(
-        "watch/<name:project>/<name:component>/",
-        weblate.accounts.views.watch,
-        name="watch",
-    ),
-    path("unwatch/<name:project>/", weblate.accounts.views.unwatch, name="unwatch"),
-    path(
-        "mute/<name:project>/<name:component>/",
-        weblate.accounts.views.mute_component,
-        name="mute",
-    ),
-    path("mute/<name:project>/", weblate.accounts.views.mute_project, name="mute"),
+    path("watch/<object_path:path>/", weblate.accounts.views.watch, name="watch"),
+    path("unwatch/<object_path:path>/", weblate.accounts.views.unwatch, name="unwatch"),
+    path("mute/<object_path:path>/", weblate.accounts.views.mute, name="mute"),
     path("remove/", weblate.accounts.views.user_remove, name="remove"),
     path("confirm/", weblate.accounts.views.confirm, name="confirm"),
     path("login/", weblate.accounts.views.WeblateLoginView.as_view(), name="login"),
     path("register/", weblate.accounts.views.register, name="register"),
     path("email/", weblate.accounts.views.email_login, name="email_login"),
+    path(
+        "invitation/<uuid:pk>/",
+        weblate.auth.views.InvitationView.as_view(),
+        name="invitation",
+    ),
+    path(
+        "auth/second-factor/<slug:backend>/",
+        weblate.accounts.views.SecondFactorLoginView.as_view(),
+        name="2fa-login",
+    ),
+    path(
+        "auth/tokens/webauthn/<int:pk>/",
+        weblate.accounts.views.WebAuthnCredentialView.as_view(),
+        name="webauthn-detail",
+    ),
+    path(
+        "auth/tokens/totp/",
+        weblate.accounts.views.TOTPView.as_view(),
+        name="totp",
+    ),
+    path(
+        "auth/tokens/totp/<int:pk>/",
+        weblate.accounts.views.TOTPDetailView.as_view(),
+        name="totp-detail",
+    ),
+    path(
+        "auth/tokens/recovery-codes/",
+        weblate.accounts.views.RecoveryCodesView.as_view(),
+        name="recovery-codes",
+    ),
     path("", include((social_urls, "social_auth"), namespace="social")),
+    path(
+        "auth/webauthn/",
+        include((webauthn_urls, "django_otp_webauthn"), namespace="otp_webauthn"),
+    ),
 ]
 
 if "simple_sso.sso_server" in settings.INSTALLED_APPS:
-    # pylint: disable=wrong-import-position
     from simple_sso.sso_server.server import Server
 
     server = Server()

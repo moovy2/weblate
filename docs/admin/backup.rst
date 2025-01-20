@@ -32,10 +32,18 @@ The generated backups are kept on the server as configured by
 :setting:`PROJECT_BACKUP_KEEP_DAYS` and :setting:`PROJECT_BACKUP_KEEP_COUNT`
 (it defaults to keep at most 3 backups for 30 days).
 
+Use the generated file to import project when :ref:`adding-projects`.
+
+.. note::
+
+   Restoring of the backup might fail if the restoring server has different set
+   of :ref:`languages` or different configuration of
+   :setting:`SIMPLIFY_LANGUAGES`. The restore will tell you which language
+   codes could not be processed and you can then add missing language
+   definitions manually.
+
 Automated backup using BorgBackup
 ---------------------------------
-
-.. versionadded:: 3.9
 
 Weblate has built-in support for creating service backups using `BorgBackup`_.
 Borg creates space-effective encrypted backups which can be safely stored in
@@ -52,7 +60,7 @@ The backups using Borg are incremental and Weblate is configured to keep followi
 * Weekly backups for 8 weeks back
 * Monthly backups for 6 months back
 
-.. image:: /screenshots/backups.png
+.. image:: /screenshots/backups.webp
 
 .. _borg-keys:
 
@@ -187,7 +195,7 @@ Restoring from BorgBackup
    When using Docker container place the data into the data volume, see
    :ref:`docker-volume`.
 
-   Please make sure the files have correct ownership and permissions, see :ref:`file-permissions`.
+   Please ensure the files have correct ownership and permissions, see :ref:`file-permissions`.
 
 The Borg session might look like this:
 
@@ -195,7 +203,7 @@ The Borg session might look like this:
 
    $ borg list /tmp/xxx
    Enter passphrase for key /tmp/xxx:
-   2019-09-26T14:56:08                  Thu, 2019-09-26 14:56:08 [de0e0f13643635d5090e9896bdaceb92a023050749ad3f3350e788f1a65576a5]
+   2019-09-26T14:56:08 Thu, 2019-09-26 14:56:08 [de0e0f13643635d5090e9896bdaceb92a023050749ad3f3350e788f1a65576a5]
    $ borg extract /tmp/xxx::2019-09-26T14:56:08
    Enter passphrase for key /tmp/xxx:
 
@@ -242,7 +250,7 @@ tools such as :program:`pg_dump` or :program:`mysqldump`. It usually performs
 better than Django backup, and it restores complete tables with all their data.
 
 You can restore this backup in a newer Weblate release, it will perform all the
-necessary migrations when running in :djadmin:`django:migrate`. Please consult
+necessary migrations when running in :wladmin:`migrate`. Please consult
 :doc:`upgrade` on more detailed info on how to upgrade between versions.
 
 Django database backup
@@ -256,7 +264,7 @@ Prior to restoring the database you need to be running exactly the same Weblate
 version the backup was made on. This is necessary as the database structure does
 change between releases and you would end up corrupting the data in some way.
 After installing the same version, run all database migrations using
-:djadmin:`django:migrate`.
+:wladmin:`migrate`.
 
 Afterwards some entries will already be created in the database and you
 will have them in the database backup as well. The recommended approach is to
@@ -299,7 +307,7 @@ backups. The files are updated daily (requires a running Celery beats server, se
 The database backups are saved as plain text by default, but they can also be compressed
 or entirely skipped using :setting:`DATABASE_BACKUP`.
 
-To restore the database backup load it using database tools, for example:
+To restore the database backup, load it using database tools, for example:
 
 .. code-block:: shell
 
@@ -314,7 +322,7 @@ The version control repositories contain a copy of your upstream repositories
 with Weblate changes. If you have :ref:`component-push_on_commit` enabled for all your
 translation components, all Weblate changes are included upstream. No need to
 back up the repositories on the Weblate side as they can be cloned
-again from the upstream location(s) with no data loss.
+again from the upstream location with no data loss.
 
 SSH and GPG keys
 ++++++++++++++++
@@ -351,22 +359,20 @@ Using a cron job, you can set up a Bash command to be executed on a daily basis,
 
 .. code-block:: console
 
-     $ XZ_OPT="-9" tar -Jcf ~/backup/weblate-backup-$(date -u +%Y-%m-%d_%H%M%S).xz backups vcs ssh home media fonts secret
-
-The string between the quotes after `XZ_OPT` allows you to choose your xz options, for instance the amount of memory used for compression; see https://linux.die.net/man/1/xz
+     $ tar -Jcf ~/backup/weblate-backup-$(date -u +%Y-%m-%d_%H%M%S).xz backups vcs ssh home media fonts secret
 
 You can adjust the list of folders and files to your needs. To avoid saving the translation memory (in backups folder), you can use:
 
 .. code-block:: console
 
-     $ XZ_OPT="-9" tar -Jcf ~/backup/weblate-backup-$(date -u +%Y-%m-%d_%H%M%S).xz backups/database.sql backups/settings.py vcs ssh home media fonts secret
+     $ tar -Jcf ~/backup/weblate-backup-$(date -u +%Y-%m-%d_%H%M%S).xz backups/database.sql backups/settings.py vcs ssh home media fonts secret
 
 Restoring manual backup
 -----------------------
 
 1. Restore all data you have backed up.
 
-2. Update all repositories using :djadmin:`updategit`.
+2. Update all repositories using :wladmin:`updategit`.
 
    .. code-block:: sh
 
@@ -380,5 +386,5 @@ by following the backing up and restoration instructions above.
 
 .. seealso::
 
-   :ref:`py3`,
+   `Upgrading from Python 2 to Python 3 in the Weblate 3.11.1 documentation <https://docs.weblate.org/en/weblate-3.11.1/admin/upgrade.html#upgrading-from-python-2-to-python-3>`_,
    :ref:`database-migration`

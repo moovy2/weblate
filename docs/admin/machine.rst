@@ -1,17 +1,18 @@
 .. _machine-translation-setup:
 
-Configuring automatic suggestions
-=================================
+Automatic suggestions
+=====================
 
 .. versionchanged:: 4.13
 
    Prior to Weblate 4.13, the services were configured in the :ref:`config`.
 
 The support for several machine translation and translation memory services is
-built-in. Each service can be turned on by the administrator for whole site or
-at the project settings:
+built-in. Each service can be turned on by the administrator for whole site
+(under :guilabel:`Automatic suggestions` in :ref:`management-interface`) or at
+the project settings:
 
-.. image:: /screenshots/project-machinery.png
+.. image:: /screenshots/project-machinery.webp
 
 .. note::
 
@@ -21,26 +22,34 @@ at the project settings:
 The services translate from the source language as configured at
 :ref:`component`, see :ref:`component-source_language`.
 
+Per-project automatic suggestion can also be configured via the :ref:`api`.
+
 .. seealso::
 
    :ref:`machine-translation`
 
-.. _mt-amagama:
+.. _mt-alibaba:
 
-Amagama
+Alibaba
 -------
 
-:Service ID: ``amagama``
-:Configuration: `This service has no configuration.`
+.. versionadded:: 5.3
 
-Special installation of :ref:`mt-tmserver` run by the authors of Virtaal.
+:Service ID: ``alibaba``
+:Configuration: +------------+-------------------+--+
+                | ``key``    | Access key ID     |  |
+                +------------+-------------------+--+
+                | ``secret`` | Access key secret |  |
+                +------------+-------------------+--+
+                | ``region`` | Region ID         |  |
+                +------------+-------------------+--+
+
+Alibaba Translate is a neural machine translation service for translating text
+and it supports up to 214 language pairs.
 
 .. seealso::
 
-    :ref:`amagama:installation`,
-    :doc:`virtaal:amagama`,
-    `amaGama Translation Memory <https://amagama.translatehouse.org/>`_
-
+    `Alibaba Translate Documentation <https://www.alibabacloud.com/help/en/machine-translation>`_
 
 .. _mt-apertium-apy:
 
@@ -66,10 +75,8 @@ The recommended way to use Apertium is to run your own Apertium-APy server.
 
 .. _mt-aws:
 
-AWS
----
-
-.. versionadded:: 3.1
+Amazon Translate
+----------------
 
 :Service ID: ``aws``
 :Configuration: +------------+----------------+--+
@@ -82,17 +89,19 @@ AWS
 
 Amazon Translate is a neural machine translation service for translating text
 to and from English across a breadth of supported languages.
+The service requires the `TranslateFullAccess` Managed Policy.
+
+The service automatically uses :ref:`glossary`, see :ref:`glossary-mt`.
 
 .. seealso::
 
-    `Amazon Translate Documentation <https://docs.aws.amazon.com/translate/>`_
+    `Amazon Translate Documentation <https://docs.aws.amazon.com/translate/>`_,
+    `AWS TranslateFullAccess Policy <https://docs.aws.amazon.com/aws-managed-policy/latest/reference/TranslateFullAccess.html>`_
 
 .. _mt-baidu:
 
 Baidu
 -----
-
-.. versionadded:: 3.2
 
 :Service ID: ``baidu``
 :Configuration: +------------+---------------+--+
@@ -109,19 +118,39 @@ This service uses an API and you need to obtain an ID and API key from Baidu to 
 
     `Baidu Translate API <https://api.fanyi.baidu.com/api/trans/product/index>`_
 
+.. _mt-cyrtranslit:
+
+Cyrtranslit
+-----------
+
+.. versionadded:: 5.7
+
+:Service ID: ``cyrtranslit``
+:Configuration: `This service has no configuration.`
+
+Machine translation service using the Cyrtranslit library.
+
+This service converts text between Cyrillic and Latin scripts for languages that have both scripts.
+
+.. seealso::
+
+    `Cyrtranslit repository <https://github.com/opendatakosovo/cyrillic-transliteration>`_
+
 .. _mt-deepl:
 
 DeepL
 -----
 
-.. versionadded:: 2.20
-
 :Service ID: ``deepl``
-:Configuration: +---------+---------+--+
-                | ``url`` | API URL |  |
-                +---------+---------+--+
-                | ``key`` | API key |  |
-                +---------+---------+--+
+:Configuration: +---------------+---------------------+-------------------------------------------------------------------------------------+
+                | ``url``       | API URL             |                                                                                     |
+                +---------------+---------------------+-------------------------------------------------------------------------------------+
+                | ``key``       | API key             |                                                                                     |
+                +---------------+---------------------+-------------------------------------------------------------------------------------+
+                | ``formality`` | Formality           | Uses the specified formality if language is not specified as (in)formal             |
+                +---------------+---------------------+-------------------------------------------------------------------------------------+
+                | ``context``   | Translation context | Describe the context of the translation to improve the accuracy of the translation. |
+                +---------------+---------------------+-------------------------------------------------------------------------------------+
 
 DeepL is paid service providing good machine translation for a few languages.
 You need to purchase :guilabel:`DeepL API` subscription or you can use legacy
@@ -150,11 +179,19 @@ https://api.deepl.com/v2/translate?text=Hello&target_lang=FR&auth_key=XXX
 Replace the XXX with your auth_key. If you receive a JSON object which contains
 "Bonjour", you have the correct URL; if not, try the other three.
 
+Weblate supports DeepL formality, it will choose matching one based on the
+language (for example, there is ``de@formal`` and ``de@informal``).
+
+The translation context can optionally be specified to improve translations quality. Read more on that in
+`DeepL translation context documentation <https://developers.deepl.com/docs/best-practices/working-with-context>`_.
+
+The service automatically uses :ref:`glossary`, see :ref:`glossary-mt`.
+
 .. seealso::
 
-    `DeepL website <https://www.deepl.com/>`_,
+    `DeepL translator <https://www.deepl.com/translator>`_,
     `DeepL pricing <https://www.deepl.com/pro>`_,
-    `DeepL API documentation <https://www.deepl.com/docs-api.html>`_
+    `DeepL API documentation <https://developers.deepl.com/docs>`_
 
 .. _mt-glosbe:
 
@@ -176,17 +213,17 @@ from one IP in a set period of time, to prevent abuse.
 
 .. _mt-google-translate:
 
-Google Translate
-----------------
+Google Cloud Translation Basic
+------------------------------
 
 :Service ID: ``google-translate``
 :Configuration: +---------+---------+--+
                 | ``key`` | API key |  |
                 +---------+---------+--+
 
-Machine translation service provided by Google.
+Machine translation service provided by the Google Cloud services.
 
-This service uses the Google Translation API, and you need to obtain an API key and turn on
+This service uses the Google Translation API v2, and you need to obtain an API key and turn on
 billing in the Google API console.
 
 .. seealso::
@@ -195,26 +232,80 @@ billing in the Google API console.
 
 .. _mt-google-translate-api-v3:
 
-Google Translate API v3
------------------------
+Google Cloud Translation Advanced
+---------------------------------
 
 :Service ID: ``google-translate-api-v3``
-:Configuration: +-----------------+---------------------------------------+--+
-                | ``credentials`` | Google Translate service account info |  |
-                +-----------------+---------------------------------------+--+
-                | ``project``     | Google Translate project              |  |
-                +-----------------+---------------------------------------+--+
-                | ``location``    | Google Translate location             |  |
-                +-----------------+---------------------------------------+--+
+:Configuration: +-----------------+---------------------------------------+----------------------------------------------------------------------------------------------------------+
+                | ``credentials`` | Google Translate service account info | Enter a JSON key for the service account.                                                                |
+                +-----------------+---------------------------------------+----------------------------------------------------------------------------------------------------------+
+                | ``project``     | Google Translate project              | Enter the numeric or alphanumeric ID of your Google Cloud project.                                       |
+                +-----------------+---------------------------------------+----------------------------------------------------------------------------------------------------------+
+                | ``location``    | Google Translate location             | Choose a Google Cloud Translation region that is used for the Google Cloud project or is closest to you. |
+                +-----------------+---------------------------------------+----------------------------------------------------------------------------------------------------------+
+                | ``bucket_name`` | Google Storage Bucket name            | Enter the name of the Google Cloud Storage bucket that is used to store the Glossary files.              |
+                +-----------------+---------------------------------------+----------------------------------------------------------------------------------------------------------+
 
-Machine translation service provided by Google Cloud services.
+Machine translation service provided by the Google Cloud services.
+
+This service uses the Google Translation API v3 and you need credentials in JSON format to access it.
+
+In order to use this service, you first need to go through the following steps:
+
+1. `Select or create a Cloud Platform project.`_
+2. `Enable billing for your project.`_
+3. `Enable the Cloud Translation.`_
+4. `Setup Authentication.`_
+
+.. _Select or create a Cloud Platform project.: https://console.cloud.google.com/project
+.. _Enable billing for your project.: https://cloud.google.com/billing/docs/how-to/modify-project#enable_billing_for_a_project
+.. _Enable the Cloud Translation.: https://cloud.google.com/translate/docs/
+.. _Setup Authentication.: https://googleapis.dev/python/google-api-core/latest/auth.html
+
+
+Optionally, you can configure the service to use :ref:`glossary` by setting up a Bucket:
+
+1. `Create a Google Cloud bucket.`_
+2. `Set bucket location to "us-central1".`_
+3. `Grant 'Storage Admin' permission to the Service Account.`_
+
+.. _Create a Google Cloud bucket.: https://cloud.google.com/storage/docs/creating-buckets
+.. _Set bucket location to "us-central1".: https://cloud.google.com/translate/docs/migrate-to-v3#resources_projects_and_locations
+.. _Grant 'Storage Admin' permission to the Service Account.: https://cloud.google.com/translate/docs/access-control
+
 
 .. seealso::
 
     `Google translate documentation <https://cloud.google.com/translate/docs>`_,
     `Authenticate to Cloud services using client libraries <https://cloud.google.com/docs/authentication/client-libraries>`_,
     `Creating Google Translate project <https://cloud.google.com/appengine/docs/standard/nodejs/building-app/creating-project>`_,
-    `Google Cloud App Engine locations <https://cloud.google.com/appengine/docs/locations>`_
+    `Google Cloud App Engine locations <https://cloud.google.com/appengine/docs/standard/locations>`_
+
+.. _mt-ibm:
+
+IBM Watson Language Translator
+------------------------------
+
+.. versionadded:: 4.16
+
+:Service ID: ``ibm``
+:Configuration: +---------+---------+--+
+                | ``url`` | API URL |  |
+                +---------+---------+--+
+                | ``key`` | API key |  |
+                +---------+---------+--+
+
+.. warning::
+
+   This service is deprecated by vendor and will be withdrawn entirely as of 10 December 2024.
+
+IBM Watson Language Translator translates text from one language to another.
+The service offers multiple domain-specific models.
+
+.. seealso::
+
+    `Watson Language Translator <https://www.ibm.com/products/natural-language-processing>`_,
+    `IBM Cloud API Docs <https://cloud.ibm.com/apidocs/language-translator>`_
 
 .. _mt-libretranslate:
 
@@ -240,60 +331,52 @@ and there are several mirrors available to use the API for free.
 .. seealso::
 
     `LibreTranslate website <https://libretranslate.com/>`_,
-    `LibreTranslate repository <https://github.com/LibreTranslate/LibreTranslate>`_,
-    `LibreTranslate mirrors <https://github.com/LibreTranslate/LibreTranslate#user-content-mirrors>`_
-
-.. _mt-microsoft-terminology:
-
-Microsoft Terminology
----------------------
-
-.. versionadded:: 2.19
-
-:Service ID: ``microsoft-terminology``
-:Configuration: `This service has no configuration.`
-
-The Microsoft Terminology Service API allows you to programmatically access the
-terminology, definitions and user interface (UI) strings available in the
-Language Portal through a web service.
-
-.. seealso::
-
-    `Microsoft Terminology Service API <https://www.microsoft.com/en-us/language/Microsoft-Terminology-API>`_
-
+    `LibreTranslate repository <https://github.com/LibreTranslate/LibreTranslate>`_
 
 .. _mt-microsoft-translator:
 
-Microsoft Translator
---------------------
-
-.. versionadded:: 2.10
+Azure AI Translator
+-------------------
 
 :Service ID: ``microsoft-translator``
-:Configuration: +------------------+--------------------------+--------------------------------------------------------------------+
-                | ``key``          | API key                  |                                                                    |
-                +------------------+--------------------------+--------------------------------------------------------------------+
-                | ``endpoint_url`` | Application endpoint URL |                                                                    |
-                +------------------+--------------------------+--------------------------------------------------------------------+
-                | ``base_url``     | Application base URL     | Available choices:                                                 |
-                |                  |                          |                                                                    |
-                |                  |                          | ``api.cognitive.microsofttranslator.com`` -- Global (non-regional) |
-                |                  |                          |                                                                    |
-                |                  |                          | ``api-apc.cognitive.microsofttranslator.com`` -- Asia Pacific      |
-                |                  |                          |                                                                    |
-                |                  |                          | ``api-eur.cognitive.microsofttranslator.com`` -- Europe            |
-                |                  |                          |                                                                    |
-                |                  |                          | ``api-nam.cognitive.microsofttranslator.com`` -- North America     |
-                |                  |                          |                                                                    |
-                |                  |                          | ``api.translator.azure.cn`` -- China                               |
-                +------------------+--------------------------+--------------------------------------------------------------------+
-                | ``region``       | Application region       |                                                                    |
-                +------------------+--------------------------+--------------------------------------------------------------------+
+:Configuration: +------------------+-------------------------------+---------------------------------------------------------------------------+
+                | ``key``          | API key                       |                                                                           |
+                +------------------+-------------------------------+---------------------------------------------------------------------------+
+                | ``base_url``     | Application base URL          | Available choices:                                                        |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api.cognitive.microsofttranslator.com`` -- Global (non-regional)        |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api-apc.cognitive.microsofttranslator.com`` -- Asia Pacific             |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api-eur.cognitive.microsofttranslator.com`` -- Europe                   |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api-nam.cognitive.microsofttranslator.com`` -- North America            |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api.translator.azure.cn`` -- China                                      |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api.cognitive.microsofttranslator.us`` -- Azure US Government cloud     |
+                +------------------+-------------------------------+---------------------------------------------------------------------------+
+                | ``endpoint_url`` | Authentication service URL    | Regional or multi-service can be specified using region field below.      |
+                |                  |                               |                                                                           |
+                |                  |                               | Available choices:                                                        |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api.cognitive.microsoft.com`` -- Global                                 |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api.cognitive.azure.cn`` -- China                                       |
+                |                  |                               |                                                                           |
+                |                  |                               | ``api.cognitive.microsoft.us`` -- Azure US Government cloud               |
+                +------------------+-------------------------------+---------------------------------------------------------------------------+
+                | ``region``       | Authentication service region |                                                                           |
+                +------------------+-------------------------------+---------------------------------------------------------------------------+
+                | ``category``     | Category                      | Specify a customized system category ID to use it instead of general one. |
+                +------------------+-------------------------------+---------------------------------------------------------------------------+
 
 Machine translation service provided by Microsoft in Azure portal as a one of
 Cognitive Services.
 
 Weblate implements Translator API V3.
+
+The service automatically uses :ref:`glossary` via `dynamic dictionary <https://learn.microsoft.com/en-us/azure/ai-services/translator/dynamic-dictionary>`_, see :ref:`glossary-mt`.
 
 Translator Text API V2
 ``````````````````````
@@ -304,17 +387,45 @@ Translator Text API V3
 You need to register at Azure portal and use the key you obtain there.
 With new Azure keys, you also need to set ``region`` to locale of your service.
 
+You can also specify a custom category to use `custom translator <https://learn.microsoft.com/en-gb/azure/ai-services/Translator/custom-translator/concepts/customization>`_.
+
 .. hint::
 
    For Azure China, please use your endpoint from the Azure Portal.
 
 .. seealso::
 
-   `Cognitive Services - Text Translation API <https://azure.microsoft.com/en-us/products/cognitive-services/translator/>`_,
+   `Cognitive Services - Text Translation API <https://azure.microsoft.com/en-us/products/ai-services/ai-translator>`_,
    `Microsoft Azure Portal <https://portal.azure.com/>`_,
-   `Base URLs <https://learn.microsoft.com/en-us/azure/cognitive-services/translator/reference/v3-0-reference#base-urls>`_,
-   `"Authenticating with a Multi-service resource" <https://learn.microsoft.com/en-us/azure/cognitive-services/translator/reference/v3-0-reference#authenticating-with-a-multi-service-resource>`_
-   `"Authenticating with an access token" section <https://learn.microsoft.com/en-us/azure/cognitive-services/translator/reference/v3-0-reference#authenticating-with-an-access-token>`_
+   `Base URLs <https://learn.microsoft.com/en-us/azure/ai-services/translator/reference/v3-0-reference#base-urls>`_,
+   `"Authenticating with a Multi-service resource" <https://learn.microsoft.com/en-us/azure/ai-services/translator/reference/v3-0-reference#authenticating-with-a-multi-service-resource>`_
+   `"Authenticating with an access token" section <https://learn.microsoft.com/en-us/azure/ai-services/translator/reference/v3-0-reference#authenticating-with-an-access-token>`_
+
+.. _mt-azure-openai:
+
+Azure OpenAI
+------------
+
+.. versionadded:: 5.8
+
+:Service ID: ``azure-openai``
+:Configuration: +--------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``key``            | API key                   |                                                                                                                           |
+                +--------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``persona``        | Translator persona        | Describe the persona of translator to improve the accuracy of the translation. For example: “You are a squirrel breeder.” |
+                +--------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``style``          | Translator style          | Describe the style of translation. For example: “Use informal language.”                                                  |
+                +--------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``azure_endpoint`` | Azure OpenAI endpoint URL | Endpoint URL of the instance, e.g: https://my-instance.openai.azure.com.                                                  |
+                +--------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``deployment``     | Azure OpenAI deployment   | The model's unique deployment name.                                                                                       |
+                +--------------------+---------------------------+---------------------------------------------------------------------------------------------------------------------------+
+
+Performs translation using `OpenAI`_ hosted on Azure.
+
+.. seealso::
+
+    :ref:`mt-openai`
 
 .. _mt-modernmt:
 
@@ -324,15 +435,19 @@ ModernMT
 .. versionadded:: 4.2
 
 :Service ID: ``modernmt``
-:Configuration: +---------+---------+--+
-                | ``url`` | API URL |  |
-                +---------+---------+--+
-                | ``key`` | API key |  |
-                +---------+---------+--+
+:Configuration: +--------------------+----------------+-----------------------------------------------------------------------+
+                | ``url``            | API URL        |                                                                       |
+                +--------------------+----------------+-----------------------------------------------------------------------+
+                | ``key``            | API key        |                                                                       |
+                +--------------------+----------------+-----------------------------------------------------------------------+
+                | ``context_vector`` | Context vector | Comma-separated list of memory IDs:weight. e.g: 1234:0.123,4567:0.456 |
+                +--------------------+----------------+-----------------------------------------------------------------------+
+
+The service automatically uses :ref:`glossary`, see :ref:`glossary-mt`.
 
 .. seealso::
 
-    `ModernMT API <https://www.modernmt.com/api/#translation>`_,
+    `ModernMT API <https://www.modernmt.com/api/#translation>`_
 
 .. _mt-mymemory:
 
@@ -365,8 +480,6 @@ You can also ask them for more.
 Netease Sight
 -------------
 
-.. versionadded:: 3.3
-
 :Service ID: ``netease-sight``
 :Configuration: +------------+---------------+--+
                 | ``key``    | Client ID     |  |
@@ -382,23 +495,84 @@ This service uses an API, and you need to obtain key and secret from NetEase.
 
     `NetEase Sight Translation Platform <https://sight.youdao.com/>`_
 
+.. _mt-openai:
+
+OpenAI
+------
+
+.. versionadded:: 5.3
+
+:Service ID: ``openai``
+:Configuration: +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``key``          | API key             |                                                                                                                           |
+                +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``base_url``     | OpenAI API base URL | Base URL of the OpenAI API, if it differs from the OpenAI default URL                                                     |
+                +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``model``        | OpenAI model        | Available choices:                                                                                                        |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``auto`` -- Automatic selection                                                                                           |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``gpt-4o`` -- GPT-4o                                                                                                      |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``gpt-4-1106-preview`` -- GPT-4 Turbo                                                                                     |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``gpt-4`` -- GPT-4                                                                                                        |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``gpt-3.5-turbo-1106`` -- Updated GPT 3.5 Turbo                                                                           |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``gpt-3.5-turbo`` -- GPT-3.5 Turbo                                                                                        |
+                |                  |                     |                                                                                                                           |
+                |                  |                     | ``custom`` -- Custom model                                                                                                |
+                +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``custom_model`` | Custom model name   | Only needed when model is set to 'Custom model'                                                                           |
+                +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``persona``      | Translator persona  | Describe the persona of translator to improve the accuracy of the translation. For example: “You are a squirrel breeder.” |
+                +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+                | ``style``        | Translator style    | Describe the style of translation. For example: “Use informal language.”                                                  |
+                +------------------+---------------------+---------------------------------------------------------------------------------------------------------------------------+
+
+Performs translation using `OpenAI`_.
+
+The OpenAI API is powered by a diverse set of models with different
+capabilities and price points. Automatic selection chooses the best model
+available, but you might want to choose a specific model that matches your needs.
+
+Use persona and style fields to further fine-tune translations. These will be
+used in a prompt for OpenAI and allow you to change the style of the
+translations.
+
+The service automatically uses :ref:`glossary`, see :ref:`glossary-mt`.
+
+.. versionchanged:: 5.7
+
+   Support for custom model and base URL was added.
+
+.. seealso::
+
+   `OpenAI models <https://platform.openai.com/docs/models>`_,
+   `OpenAI API keys <https://platform.openai.com/api-keys>`_
+
+.. _OpenAI: https://openai.com/
+
 .. _mt-sap-translation-hub:
 
 SAP Translation Hub
 -------------------
 
 :Service ID: ``sap-translation-hub``
-:Configuration: +---------------+----------------------------+--+
-                | ``url``       | API URL                    |  |
-                +---------------+----------------------------+--+
-                | ``key``       | API key                    |  |
-                +---------------+----------------------------+--+
-                | ``username``  | SAP username               |  |
-                +---------------+----------------------------+--+
-                | ``password``  | SAP password               |  |
-                +---------------+----------------------------+--+
-                | ``enable_mt`` | Enable machine translation |  |
-                +---------------+----------------------------+--+
+:Configuration: +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+                | ``url``       | API URL                    |                                                                                                                                                 |
+                +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+                | ``key``       | API key                    |                                                                                                                                                 |
+                +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+                | ``username``  | SAP username               |                                                                                                                                                 |
+                +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+                | ``password``  | SAP password               |                                                                                                                                                 |
+                +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+                | ``enable_mt`` | Enable machine translation |                                                                                                                                                 |
+                +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
+                | ``domain``    | Translation domain         | The ID of a translation domain, for example, BC. If you do not specify a domain, the method searches for translations in all available domains. |
+                +---------------+----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------+
 
 Machine translation service provided by SAP.
 
@@ -417,8 +591,23 @@ addition to the term database.
 
 .. seealso::
 
-    `SAP Translation Hub API <https://api.sap.com/shell/discover/contentpackage/SAPTranslationHub/api/translationhub>`_,
-    `Building the Base URL of SAP Translation Hub <https://help.sap.com/docs/SAP_TRANSLATION_HUB/ed6ce7a29bdd42169f5f0d7868bce6eb/3a011fba82644259a2cc3c919863f4b4.html>`_
+    * `What is SAP Translation Hub <https://help.sap.com/docs/translation-hub/sap-translation-hub/what-is-sap-translation-hub>`_
+    * `SAP Translation Hub API <https://api.sap.com/api/translationhub/overview>`_
+
+.. _mt-systran:
+
+Systran
+-------
+
+:Service ID: ``systran``
+:Configuration: +---------+---------+--+
+                | ``key`` | API key |  |
+                +---------+---------+--+
+
+
+Machine translation service provided by Systran.
+
+This service uses an API, and you need to obtain API key at <https://translate.systran.net/en/account>.
 
 .. _mt-tmserver:
 
@@ -452,10 +641,11 @@ amaGama server, which is an enhanced version of tmserver.
 
 .. seealso::
 
-    :doc:`tt:commands/tmserver`
+    :doc:`tt:commands/tmserver`,
     :ref:`amagama:installation`,
     :doc:`virtaal:amagama`,
     `Amagama Translation Memory <https://amagama.translatehouse.org/>`_
+
 
 .. _mt-weblate:
 
@@ -466,23 +656,27 @@ Weblate
 :Configuration: `This service has no configuration.`
 
 
-Weblate machine translation service can provide translations for strings that
-are already translated inside Weblate. It looks for exact matches in the
-existing strings.
+Weblate machine translation service can provide translations based
+on the exact matches of a string in the currently existing strings
+in a :guilabel:`Translated`, :guilabel:`Approved`,
+or :guilabel:`Read-only` :ref:`states <states>` inside Weblate.
 
 .. _mt-weblate-translation-memory:
 
 Weblate Translation Memory
 --------------------------
 
-.. versionadded:: 2.20
-
 :Service ID: ``weblate-translation-memory``
 :Configuration: `This service has no configuration.`
 
-Use :ref:`translation-memory` as a machine translation service. Any string that
-has been translated in past (or uploaded to the translation memory) can be
-translated in this way.
+Use :ref:`translation-memory` as a machine translation service.
+Any string that has been translated before (or uploaded to the
+translation memory) can be translated in this way.
+This suggestion source works with fuzzy matching.
+
+.. note::
+
+   Recreating :ref:`translation-memory` reduces capabilities of this TM source.
 
 .. _mt-yandex:
 
@@ -503,12 +697,31 @@ This service uses a Translation API, and you need to obtain an API key from Yand
     `Yandex Translate API <https://yandex.com/dev/translate/>`_,
     `Powered by Yandex.Translate <https://translate.yandex.com/>`_
 
+.. _mt-yandex-v2:
+
+Yandex v2
+---------
+
+.. versionadded:: 5.1
+
+:Service ID: ``yandex-v2``
+:Configuration: +---------+---------+--+
+                | ``key`` | API key |  |
+                +---------+---------+--+
+
+Machine translation service provided by Yandex.
+
+This service uses a Translation API, and you need to obtain an API key from Yandex Cloud.
+
+.. seealso::
+
+    `Yandex Translate API v2 <https://cloud.yandex.com/en/docs/translate/api-ref/authentication>`_,
+    `Powered by Yandex.Cloud <https://cloud.yandex.com/en/services/translate>`_
+
 .. _mt-youdao-zhiyun:
 
 Youdao Zhiyun
 -------------
-
-.. versionadded:: 3.2
 
 :Service ID: ``youdao-zhiyun``
 :Configuration: +------------+---------------+--+

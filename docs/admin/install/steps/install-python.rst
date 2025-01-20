@@ -11,7 +11,7 @@ Python modules
 
    .. code-block:: sh
 
-        virtualenv ~/weblate-env
+        uv venv ~/weblate-env
 
 #. Activate the virtualenv for Weblate:
 
@@ -24,9 +24,9 @@ Python modules
    .. code-block:: sh
 
         # Install Weblate with all optional dependencies
-        pip install "Weblate[all]"
+        uv pip install "weblate[all]"
 
-   Please check :ref:`optional-deps` for fine-tuning of optional dependencies.
+   Please check :ref:`python-deps` for fine-tuning of optional dependencies.
 
    .. note::
 
@@ -42,4 +42,4 @@ Python modules
 
       .. code-block:: sh
 
-         pip install --force-reinstall --no-binary :all: cffi
+         uv pip install --force-reinstall --no-binary :all: cffi

@@ -1,0 +1,26 @@
+#!/bin/sh
+
+# Copyright © Michal Čihař <michal@weblate.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+set -e
+
+cd /app/src
+
+echo "Exporting Weblate requirements..."
+uv export --no-config --format requirements-txt --python /usr/local/bin/python --all-extras --no-sources > /tmp/requirements.txt
+
+echo "Checking /app/venv..."
+if [ ! -f /app/venv/bin/activate ]; then
+    uv venv --no-config /app/venv
+fi
+echo "/app/data/python" > "/app/venv/lib/python${PYVERSION}/site-packages/weblate-docker.pth"
+# shellcheck disable=SC1091
+. /app/venv/bin/activate
+
+echo "Installing Weblate requirements..."
+uv pip install --no-config -r /tmp/requirements.txt
+
+echo "Starting Weblate..."
+exec /app/bin/start "$@"

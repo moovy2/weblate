@@ -9,13 +9,25 @@ sphinx:
   configuration: docs/conf.py
 
 # Optionally build your docs in additional formats such as PDF and ePub
-formats: all
+formats: []
 
-# Optionally set the version of Python and requirements required to build your docs
-python:
-  version: '3.7'
-  install:
-  - requirements: docs/requirements.txt
+build:
+  os: ubuntu-22.04
+  tools:
+    python: '3.11'
+  apt_packages:
+  # Graphviz is needed for sphinx.ext.graphviz
+  - graphviz
+  jobs:
+    create_environment:
+    - asdf plugin add uv
+    - asdf install uv latest
+    - asdf global uv latest
+    install:
+    - uv sync --no-sources --only-group docs --frozen
+    build:
+      html:
+      - .venv/bin/sphinx-build -T -b html -d docs/_build/doctrees docs $READTHEDOCS_OUTPUT/html
 
 # Avoid cloning submodules
 submodules:

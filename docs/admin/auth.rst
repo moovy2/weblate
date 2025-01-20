@@ -110,20 +110,57 @@ You need to register an OAuth application on GitHub and then tell Weblate all it
     SOCIAL_AUTH_GITHUB_SCOPE = ["user:email"]
 
 The GitHub should be configured to have callback URL as
-``https://example.com/accounts/complete/github/``.
+``https://WEBLATE SERVER/accounts/complete/github/``.
 
 There are similar authentication backends for GitHub for Organizations and
 GitHub for Teams. Their settings are named ``SOCIAL_AUTH_GITHUB_ORG_*`` and
 ``SOCIAL_AUTH_GITHUB_TEAM_*``, and they require additional setting of the scope
-- ``SOCIAL_AUTH_GITHUB_ORG_NAME`` or ``SOCIAL_AUTH_GITHUB_TEAM_ID``.  Their
-callback URLs are ``https://example.com/accounts/complete/github-org/`` and
-``https://example.com/accounts/complete/github-teams/``.
+- ``SOCIAL_AUTH_GITHUB_ORG_NAME`` or ``SOCIAL_AUTH_GITHUB_TEAM_ID``. Their
+callback URLs are ``https://WEBLATE SERVER/accounts/complete/github-org/`` and
+``https://WEBLATE SERVER/accounts/complete/github-teams/``.
 
 .. include:: /snippets/oauth-site.rst
 
 .. seealso::
 
     :doc:`psa:backends/github`
+
+.. _github_ee_auth:
+
+GitHub EE authentication
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+You need to register an OAuth App on GitHub EE and then tell Weblate all its secrets:
+
+.. code-block:: python
+
+    # Authentication configuration
+    AUTHENTICATION_BACKENDS = (
+        "social_core.backends.github_enterprise.GithubEnterpriseOAuth2",
+        "social_core.backends.email.EmailAuth",
+        "weblate.accounts.auth.WeblateUserBackend",
+    )
+
+    # Social auth backends setup
+    SOCIAL_AUTH_GITHUB_ENTERPRISE_KEY = "GitHub OAuth App Client ID"
+    SOCIAL_AUTH_GITHUB_ENTERPRISE_SECRET = "GitHub OAuth App Client Secret"
+    SOCIAL_AUTH_GITHUB_ENTERPRISE_URL = "https://git.example.com/"
+    SOCIAL_AUTH_GITHUB_ENTERPRISE_API_URL = "https://git.example.com/api/v3/"
+    SOCIAL_AUTH_GITHUB_ENTERPRISE_SCOPE = ["user:email"]
+
+The GitHub OAuth App should be configured to have callback URL as
+``https://WEBLATE SERVER/accounts/complete/github-enterprise/``.
+
+Instead GitHub OAuth App, GitHub App can also be used. With GitHub App
+permissions can be granted on repositories, organisation and/or user level. If
+you decide to use GitHub App, you need to enable `Access: Read-only` permission
+for Users - <Email addresses> and Organisation - <Members>.
+
+.. include:: /snippets/oauth-site.rst
+
+.. seealso::
+
+    :doc:`psa:backends/github_enterprise`
 
 .. _bitbucket_auth:
 
@@ -157,10 +194,10 @@ You need to register an application on Bitbucket and then tell Weblate all its s
 Google OAuth 2
 ~~~~~~~~~~~~~~
 
-To use Google OAuth 2, you need to register an application on
+To use Google OAuth 2, you need to register an application at
 <https://console.developers.google.com/> and enable the Google+ API.
 
-The redirect URL is ``https://WEBLATE SERVER/accounts/complete/google-oauth2/``
+The redirect URL is ``https://WEBLATE SERVER/accounts/complete/google-oauth2/``.
 
 .. code-block:: python
 
@@ -189,7 +226,7 @@ Facebook OAuth 2
 As per usual with OAuth 2 services, you need to register your application with
 Facebook. Once this is done, you can set up Weblate to use it:
 
-The redirect URL is ``https://WEBLATE SERVER/accounts/complete/facebook/``
+The redirect URL is ``https://WEBLATE SERVER/accounts/complete/facebook/``.
 
 .. code-block:: python
 
@@ -217,7 +254,7 @@ The redirect URL is ``https://WEBLATE SERVER/accounts/complete/facebook/``
 GitLab OAuth 2
 ~~~~~~~~~~~~~~
 
-For using GitLab OAuth 2, you need to register an application on
+For using GitLab OAuth 2, you need to register an application at
 <https://gitlab.com/profile/applications>.
 
 The redirect URL is ``https://WEBLATE SERVER/accounts/complete/gitlab/`` and
@@ -246,6 +283,44 @@ ensure you mark the `read_user` scope.
 
    :doc:`psa:backends/gitlab`
 
+.. _gitea_auth:
+
+Gitea OAuth 2
+~~~~~~~~~~~~~~
+
+For using Gitea OAuth 2, you need to register an application at
+``https://GITEA SERVER/user/settings/applications``.
+
+The redirect URL is ``https://WEBLATE SERVER/accounts/complete/gitea/``.
+
+.. code-block:: python
+
+    # Authentication configuration
+    AUTHENTICATION_BACKENDS = (
+        "social_core.backends.gitea.GiteaOAuth2",
+        "social_core.backends.email.EmailAuth",
+        "weblate.accounts.auth.WeblateUserBackend",
+    )
+
+    # Social auth backends setup
+    SOCIAL_AUTH_GITEA_KEY = ""
+    SOCIAL_AUTH_GITEA_SECRET = ""
+
+    # If you are using your own Gitea
+    SOCIAL_AUTH_GITEA_API_URL = "https://gitea.example.com/"
+
+.. include:: /snippets/oauth-site.rst
+
+.. note::
+
+   The configuration above also works with Forgejo;
+   for an example of production deployment with Forgejo,
+   see `Codeberg Translate <https://translate.codeberg.org>`_
+
+.. seealso::
+
+   :doc:`psa:backends/gitea`
+
 .. _azure-auth:
 
 Microsoft Azure Active Directory
@@ -256,6 +331,12 @@ Weblate can be configured to use common or specific tenants for authentication.
 The redirect URL is ``https://WEBLATE SERVER/accounts/complete/azuread-oauth2/``
 for common and ``https://WEBLATE SERVER/accounts/complete/azuread-tenant-oauth2/``
 for tenant-specific authentication.
+
+You will need following:
+
+* *Application (client) ID* can be obtained from application page. *Object ID* is not used in Weblate.
+* *Directory (tenant) ID* is needed for tenant scoped authentication, what is usually desired.
+* *Secret value* is displayed once you generate a secret for an application. *Secret ID* is not used in Weblate.
 
 .. code-block:: python
 
@@ -283,10 +364,11 @@ for tenant-specific authentication.
         "weblate.accounts.auth.WeblateUserBackend",
     )
 
-    # OAuth2 keys
+    # Application (client) ID
     SOCIAL_AUTH_AZUREAD_TENANT_OAUTH2_KEY = ""
+    # Secret value
     SOCIAL_AUTH_AZUREAD_TENANT_OAUTH2_SECRET = ""
-    # Tenant ID
+    # Directory (tenant) ID
     SOCIAL_AUTH_AZUREAD_TENANT_OAUTH2_TENANT_ID = ""
 
 .. include:: /snippets/oauth-site.rst
@@ -300,7 +382,7 @@ for tenant-specific authentication.
 Slack
 ~~~~~
 
-For using Slack OAuth 2, you need to register an application on
+For using Slack OAuth 2, you need to register an application at
 <https://api.slack.com/apps>.
 
 The redirect URL is ``https://WEBLATE SERVER/accounts/complete/slack/``.
@@ -367,6 +449,8 @@ using the following:
         "weblate.accounts.auth.WeblateUserBackend",
     )
 
+.. _password-authentication:
+
 Password authentication
 -----------------------
 
@@ -386,6 +470,10 @@ Additionally you can also install
 `django-zxcvbn-password <https://pypi.org/project/django-zxcvbn-password/>`_
 which gives quite realistic estimates of password difficulty and allows rejecting
 passwords below a certain threshold.
+
+.. seealso::
+
+   :envvar:`WEBLATE_MIN_PASSWORD_SCORE`
 
 .. _saml-auth:
 
@@ -482,7 +570,7 @@ can install it via usual means:
 .. code-block:: sh
 
     # Using PyPI
-    pip install django-auth-ldap>=1.3.0
+    uv pip install 'django-auth-ldap>=1.3.0'
 
     # Using apt-get
     apt-get install python-django-auth-ldap
@@ -542,7 +630,7 @@ Once you have the package installed, you can hook it into the Django authenticat
     ``'weblate.accounts.auth.WeblateUserBackend'`` is still needed in order to
     make permissions and facilitate anonymous users. It will also allow you
     to sign in using a local admin account, if you have created it (e.g. by using
-    :djadmin:`createadmin`).
+    :wladmin:`createadmin`).
 
 Using bind password
 ~~~~~~~~~~~~~~~~~~~
@@ -616,7 +704,7 @@ To install `django-cas-ng`:
 
 .. code-block:: sh
 
-    pip install django-cas-ng
+    uv pip install django-cas-ng
 
 Once you have the package installed you can hook it up to the Django
 authentication system by modifying the :file:`settings.py` file:
@@ -687,3 +775,42 @@ there is any) into :setting:`django:INSTALLED_APPS`:
     INSTALLED_APPS += (
         # Install authentication app here
     )
+
+
+.. _2fa:
+
+Two-factor authentication
+=========================
+
+.. versionadded:: 5.7
+
+.. hint::
+
+   Two-factor authentication adds another layer of security to your account by requiring more than just a password to sign in.
+
+Weblate supports the following second factors:
+
+Security keys (WebAuthn)
+   Both, Passkeys and security keys are supported.
+
+   Passkeys validate your identity using touch, facial recognition, a device password, or a PIN as they include user verification.
+
+   Security keys are WebAuthn credentials that can only be used as a second factor of authentication, and these only validate user presence.
+
+Authenticator apps (TOTP)
+   Authenticator apps and browser extensions like Aegis, Bitwarden, Google Authenticator,
+   1Password, Authy, Microsoft Authenticator, etc. generate time-based one-time passwords
+   that are used as a second factor to verify your identity when prompted
+   during sign-in.
+
+Recovery codes
+   Recovery codes can be used to access your account if you lose access to your device and cannot receive two-factor authentication codes.
+
+   Keep your recovery codes as safe as your password. We recommend saving them with a password manager such as Bitwarden, 1Password, Authy, or Keeper.
+
+Each user can configure this in :ref:`profile-account` and second factor will
+be required to sign in addition to the existing authentication method.
+
+This can be enforced for users at the project (see :ref:`project-enforced_2fa`) or team level.
+
+The permissions of a team with enforced two-factor authentication won't be applied to users who do not have it configured.

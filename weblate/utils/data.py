@@ -1,27 +1,29 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Data files helpers."""
+
+from __future__ import annotations
+
 import os
+from pathlib import Path
 
 from django.conf import settings
 
 
 def data_dir(component, *args):
     """Return path to data dir for given component."""
+    # TODO: remove once all users are migrated to data_path
+    if component == "cache" and settings.CACHE_DIR:
+        return os.path.join(settings.CACHE_DIR, *args)
     return os.path.join(settings.DATA_DIR, component, *args)
+
+
+def data_path(component: str) -> Path:
+    """Return path to data dir for given component."""
+    if component == "cache" and settings.CACHE_DIR:
+        # Honor cache directory if configured, legacy setups have it
+        # as a subdirectory of the data directory.
+        return Path(settings.CACHE_DIR)
+    return Path(settings.DATA_DIR) / component

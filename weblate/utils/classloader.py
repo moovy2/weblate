@@ -1,23 +1,11 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
 
 from importlib import import_module
+from weakref import WeakValueDictionary
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -29,39 +17,50 @@ def load_class(name, setting):
     try:
         module, attr = name.rsplit(".", 1)
     except ValueError as error:
-        raise ImproperlyConfigured(
-            f'Error importing class {name} in {setting}: "{error}"'
-        )
+        msg = f"Error importing class {name!r} in {setting}: {error}"
+        raise ImproperlyConfigured(msg) from error
     try:
         mod = import_module(module)
     except ImportError as error:
-        raise ImproperlyConfigured(
-            f'Error importing module {module} in {setting}: "{error}"'
-        )
+        msg = f"Error importing module {module!r} in {setting}: {error}"
+        raise ImproperlyConfigured(msg) from error
     try:
         return getattr(mod, attr)
-    except AttributeError:
-        raise ImproperlyConfigured(
-            f'Module "{module}" does not define a "{attr}" class in {setting}'
-        )
+    except AttributeError as error:
+        msg = f"Module {module!r} does not define a {attr!r} class in {setting}"
+        raise ImproperlyConfigured(msg) from error
 
 
 class ClassLoader:
     """Dict like object to lazy load list of classes."""
 
-    def __init__(self, name: str, construct: bool = True, collect_errors: bool = False):
+    instances: WeakValueDictionary[str, ClassLoader] = WeakValueDictionary()
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        base_class: type,
+        construct: bool = True,
+        collect_errors: bool = False,
+    ) -> None:
         self.name = name
         self.construct = construct
         self.collect_errors = collect_errors
-        self.errors = {}
+        self.errors: dict[str, str | Exception] = {}
+        self.base_class: type = base_class
+        obj = self.instances.get(name)
+        if obj is None:
+            self.instances[name] = self
 
     def get_settings(self):
         result = getattr(settings, self.name)
         if result is None:
             # Special case to disable all checks/...
             result = []
-        elif not isinstance(result, (list, tuple)):
-            raise ImproperlyConfigured(f"Setting {self.name} must be list or tuple!")
+        elif not isinstance(result, list | tuple):
+            msg = f"Setting {self.name} must be list or tuple!"
+            raise ImproperlyConfigured(msg)
         return result
 
     def load_data(self):
@@ -75,6 +74,13 @@ class ClassLoader:
                 if self.collect_errors:
                     continue
                 raise
+            try:
+                if not issubclass(obj, self.base_class):
+                    msg = f"Setting {self.name} must be a {self.base_class.__name__} subclass, but {path} is {obj!r}"
+                    raise ImproperlyConfigured(msg)
+            except TypeError as error:
+                msg = f"Setting {self.name} must be a {self.base_class.__name__} subclass, but {path} is {obj!r}"
+                raise ImproperlyConfigured(msg) from error
             if self.construct:
                 obj = obj()
             result[obj.get_identifier()] = obj
@@ -87,7 +93,7 @@ class ClassLoader:
     def __getitem__(self, key):
         return self.data.__getitem__(key)
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key, value) -> None:
         self.data.__setitem__(key, value)
 
     def get(self, key):
@@ -105,16 +111,21 @@ class ClassLoader:
     def __iter__(self):
         return self.data.__iter__()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.data.__len__()
 
-    def __contains__(self, item):
+    def __contains__(self, item) -> bool:
         return self.data.__contains__(item)
 
     def exists(self):
         return bool(self.data)
 
-    def get_choices(self, empty=False, exclude=(), cond=lambda x: True):
+    def get_choices(self, empty=False, exclude=(), cond=None):
+        if cond is None:
+
+            def cond(x) -> bool:
+                return True
+
         result = [
             (x, self[x].name)
             for x in sorted(self)

@@ -11,7 +11,7 @@ Configuring Weblate
    to :file:`~/weblate-env/lib/python3.9/site-packages/weblate/settings.py`.
 
 #.
-   .. include:: steps/adjust-config.rst
+   .. include:: /admin/install/steps/adjust-config.rst
 
 #. Create the database and its structure for Weblate (the example settings use
    PostgreSQL, check :ref:`database-setup` for a production-ready setup):
@@ -20,12 +20,28 @@ Configuring Weblate
 
         weblate migrate
 
-#. Create an account for the administrator user and copy its password
-   to the clipboard, and also save it for later use:
+   .. seealso::
+
+      :wladmin:`migrate`
+
+#. Create an administrator user account ``admin``, generate its password, and copy it
+   to the clipboard; remember to save it for later use:
 
    .. code-block:: sh
 
         weblate createadmin
+
+   .. hint::
+
+      If you previously missed/lost the admin password, you can generate a new one with the following command:
+
+      .. code-block:: sh
+
+         weblate createadmin --update
+
+   .. seealso::
+
+      :wladmin:`createadmin`
 
 #. Collect the static files for your web server (see :ref:`server` and :ref:`static-files`):
 

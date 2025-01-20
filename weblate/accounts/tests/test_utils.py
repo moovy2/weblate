@@ -1,33 +1,22 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 """Tests for various helper utilities."""
 
+from __future__ import annotations
 
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
+from django.test.utils import override_settings
 
+from weblate.accounts.models import format_private_email
 from weblate.accounts.pipeline import slugify_username
 from weblate.accounts.tasks import cleanup_auditlog, cleanup_social_auth
+from weblate.utils.validators import EmailValidator, validate_username
 
 
-class PipelineTest(TestCase):
-    def test_slugify(self):
+class PipelineTest(SimpleTestCase):
+    def test_slugify(self) -> None:
         self.assertEqual(slugify_username("zkouska"), "zkouska")
         self.assertEqual(slugify_username("Zkouska"), "Zkouska")
         self.assertEqual(slugify_username("zkouška"), "zkouska")
@@ -37,8 +26,42 @@ class PipelineTest(TestCase):
 
 
 class TasksTest(TestCase):
-    def test_cleanup_social_auth(self):
+    def test_cleanup_social_auth(self) -> None:
         cleanup_social_auth()
 
-    def test_cleanup_auditlog(self):
+    def test_cleanup_auditlog(self) -> None:
         cleanup_auditlog()
+
+
+@override_settings(
+    PRIVATE_COMMIT_EMAIL_TEMPLATE="{username}@users.noreply.{site_domain}",
+    SITE_DOMAIN="example.com",
+)
+class FormatPrivateMainTestCase(SimpleTestCase):
+    def validate_email(self, username: str, expected: str):
+        # Make sure username is valid
+        if username:
+            validate_username(username)
+        # Generate e-mail
+        email = format_private_email(username, 99)
+        # Validate e-mail
+        EmailValidator()(email)
+        # Make sure it is expected one
+        self.assertEqual(email, expected)
+
+    def test_format_private_email(self):
+        self.validate_email("testuser", "testuser@users.noreply.example.com")
+
+    @override_settings(SITE_DOMAIN="example.com:8080")
+    def test_format_private_email_port(self):
+        self.validate_email("testuser", "testuser@users.noreply.example.com")
+
+    def test_format_private_email_dot(self):
+        self.validate_email("testuser.", "testuser_@users.noreply.example.com")
+        self.validate_email("testuser....", "testuser____@users.noreply.example.com")
+
+    def test_format_private_email_blank(self):
+        self.validate_email("", "user-99@users.noreply.example.com")
+
+    def test_format_private_email_unicode(self):
+        self.validate_email("zkouška", "zkouska@users.noreply.example.com")

@@ -1,29 +1,20 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import models
 
+if TYPE_CHECKING:
+    from weblate.auth.models import User
+    from weblate.trans.models import Component
+
 
 class ContributorAgreementManager(models.Manager):
-    def has_agreed(self, user, component):
+    def has_agreed(self, user: User, component: Component):
         cache_key = (user.pk, component.pk)
         if cache_key not in user.cla_cache:
             user.cla_cache[cache_key] = self.filter(
@@ -31,8 +22,8 @@ class ContributorAgreementManager(models.Manager):
             ).exists()
         return user.cla_cache[cache_key]
 
-    def create(self, user, component, **kwargs):
-        user.cla_cache[(user.pk, component.pk)] = True
+    def create(self, user: User, component: Component, **kwargs):
+        user.cla_cache[user.pk, component.pk] = True
         return super().create(user=user, component=component, **kwargs)
 
     def order(self):
@@ -41,9 +32,9 @@ class ContributorAgreementManager(models.Manager):
 
 class ContributorAgreement(models.Model):
     user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.deletion.CASCADE
+        settings.AUTH_USER_MODEL, on_delete=models.deletion.CASCADE, db_index=False
     )
-    component = models.ForeignKey("Component", on_delete=models.deletion.CASCADE)
+    component = models.ForeignKey("trans.Component", on_delete=models.deletion.CASCADE)
     timestamp = models.DateTimeField(auto_now=True)
 
     objects = ContributorAgreementManager()
@@ -53,5 +44,5 @@ class ContributorAgreement(models.Model):
         verbose_name = "contributor agreement"
         verbose_name_plural = "contributor agreements"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.user.username}:{self.component}"

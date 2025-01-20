@@ -1,35 +1,25 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
 
 import django.contrib.sitemaps.views
 import django.views.i18n
 import django.views.static
 from django.conf import settings
+from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.decorators.cache import cache_control, cache_page
 from django.views.decorators.vary import vary_on_cookie
 from django.views.generic import RedirectView, TemplateView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView
 
 import weblate.accounts.urls
 import weblate.accounts.views
 import weblate.addons.views
 import weblate.api.urls
+import weblate.auth.views
 import weblate.checks.views
 import weblate.fonts.views
 import weblate.glossary.views
@@ -58,23 +48,13 @@ import weblate.trans.views.search
 import weblate.trans.views.settings
 import weblate.trans.views.source
 import weblate.trans.views.widgets
-import weblate.wladmin.sites
 import weblate.wladmin.views
 from weblate.auth.decorators import management_access
 from weblate.configuration.views import CustomCSSView
 from weblate.sitemaps import SITEMAPS
-from weblate.trans.feeds import (
-    ChangesFeed,
-    ComponentChangesFeed,
-    LanguageChangesFeed,
-    ProjectChangesFeed,
-    TranslationChangesFeed,
-)
+from weblate.trans.feeds import ChangesFeed, LanguageChangesFeed, TranslationChangesFeed
 from weblate.trans.views.changes import ChangesCSVView, ChangesView, show_change
-from weblate.utils.urls import register_weblate_converters
 from weblate.utils.version import VERSION
-
-register_weblate_converters()
 
 handler400 = weblate.trans.views.error.bad_request
 handler403 = weblate.trans.views.error.denied
@@ -90,40 +70,31 @@ if URL_PREFIX:
 real_patterns = [
     path("", weblate.trans.views.dashboard.home, name="home"),
     path("projects/", weblate.trans.views.basic.list_projects, name="projects"),
+    # Object display
     path(
-        "projects/<name:project>/",
-        weblate.trans.views.basic.show_project,
-        name="project",
+        "projects/<object_path:path>/",
+        weblate.trans.views.basic.show,
+        name="show",
     ),
     # Engagement pages
     path(
-        "engage/<name:project>/",
+        "engage/<object_path:path>/",
         weblate.trans.views.basic.show_engage,
         name="engage",
     ),
+    # Component pages
     path(
-        "engage/<name:project>/<name:lang>/",
-        weblate.trans.views.basic.show_engage,
-        name="engage",
-    ),
-    # Subroject pages
-    path(
-        "projects/<name:project>/<name:component>/",
-        weblate.trans.views.basic.show_component,
-        name="component",
-    ),
-    path(
-        "guide/<name:project>/<name:component>/",
+        "guide/<object_path:path>/",
         weblate.trans.views.basic.guide,
         name="guide",
     ),
     path(
-        "matrix/<name:project>/<name:component>/",
+        "matrix/<object_path:path>/",
         weblate.trans.views.source.matrix,
         name="matrix",
     ),
     path(
-        "js/matrix/<name:project>/<name:component>/",
+        "js/matrix/<object_path:path>/",
         weblate.trans.views.source.matrix_load,
         name="matrix-load",
     ),
@@ -134,44 +105,29 @@ real_patterns = [
     ),
     # Translation pages
     path(
-        "projects/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.basic.show_translation,
-        name="translation",
-    ),
-    path(
         "component-list/<name:name>/",
         weblate.trans.views.basic.show_component_list,
         name="component-list",
     ),
     path(
-        "browse/<name:project>/<name:component>/<name:lang>/",
+        "browse/<object_path:path>/",
         weblate.trans.views.edit.browse,
         name="browse",
     ),
     path(
-        "translate/<name:project>/<name:component>/<name:lang>/",
+        "translate/<object_path:path>/",
         weblate.trans.views.edit.translate,
         name="translate",
     ),
     path(
-        "zen/<name:project>/<name:component>/<name:lang>/",
+        "zen/<object_path:path>/",
         weblate.trans.views.edit.zen,
         name="zen",
     ),
     path(
-        "download/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.files.download_translation,
-        name="download_translation",
-    ),
-    path(
-        "download/<name:project>/<name:component>/",
-        weblate.trans.views.files.download_component,
-        name="download_component",
-    ),
-    path(
-        "download/<name:project>/",
-        weblate.trans.views.files.download_project,
-        name="download_project",
+        "download/<object_path:path>/",
+        weblate.trans.views.files.download,
+        name="download",
     ),
     path(
         "download-list/<name:name>/",
@@ -179,14 +135,9 @@ real_patterns = [
         name="download_component_list",
     ),
     path(
-        "download-language/<name:lang>/<name:project>/",
-        weblate.trans.views.files.download_lang_project,
-        name="download_lang_project",
-    ),
-    path(
-        "upload/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.files.upload_translation,
-        name="upload_translation",
+        "upload/<object_path:path>/",
+        weblate.trans.views.files.upload,
+        name="upload",
     ),
     path(
         "unit/<int:unit_id>/delete/",
@@ -194,79 +145,39 @@ real_patterns = [
         name="delete-unit",
     ),
     path(
-        "new-unit/<name:project>/<name:component>/<name:lang>/",
+        "new-unit/<object_path:path>/",
         weblate.trans.views.edit.new_unit,
         name="new-unit",
     ),
     path(
-        "auto-translate/<name:project>/<name:component>/<name:lang>/",
+        "auto-translate/<object_path:path>/",
         weblate.trans.views.edit.auto_translation,
         name="auto_translation",
     ),
     path(
-        "replace/<name:project>/",
+        "replace/<object_path:path>/",
         weblate.trans.views.search.search_replace,
         name="replace",
     ),
     path(
-        "replace/<name:project>/<name:component>/",
-        weblate.trans.views.search.search_replace,
-        name="replace",
-    ),
-    path(
-        "replace/<name:project>/-/<name:lang>/",
-        weblate.trans.views.search.search_replace,
-        name="replace",
-    ),
-    path(
-        "replace/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.search.search_replace,
-        name="replace",
-    ),
-    path(
-        "bulk-edit/<name:project>/",
-        weblate.trans.views.search.bulk_edit,
-        name="bulk-edit",
-    ),
-    path(
-        "bulk-edit/<name:project>/<name:component>/",
-        weblate.trans.views.search.bulk_edit,
-        name="bulk-edit",
-    ),
-    path(
-        "bulk-edit/<name:project>/-/<name:lang>/",
-        weblate.trans.views.search.bulk_edit,
-        name="bulk-edit",
-    ),
-    path(
-        "bulk-edit/<name:project>/<name:component>/<name:lang>/",
+        "bulk-edit/<object_path:path>/",
         weblate.trans.views.search.bulk_edit,
         name="bulk-edit",
     ),
     path("credits/", weblate.trans.views.reports.get_credits, name="credits"),
     path("counts/", weblate.trans.views.reports.get_counts, name="counts"),
     path(
-        "credits/<name:project>/",
+        "credits/<object_path:path>/",
         weblate.trans.views.reports.get_credits,
         name="credits",
     ),
     path(
-        "counts/<name:project>/",
+        "counts/<object_path:path>/",
         weblate.trans.views.reports.get_counts,
         name="counts",
     ),
     path(
-        "credits/<name:project>/<name:component>/",
-        weblate.trans.views.reports.get_credits,
-        name="credits",
-    ),
-    path(
-        "counts/<name:project>/<name:component>/",
-        weblate.trans.views.reports.get_counts,
-        name="counts",
-    ),
-    path(
-        "new-lang/<name:project>/<name:component>/",
+        "new-lang/<object_path:path>/",
         weblate.trans.views.basic.new_language,
         name="new-language",
     ),
@@ -276,14 +187,19 @@ real_patterns = [
         name="create-language",
     ),
     path(
-        "addons/<name:project>/<name:component>/",
+        "addons/<object_path:path>/",
         weblate.addons.views.AddonList.as_view(),
         name="addons",
     ),
     path(
-        "addons/<name:project>/<name:component>/<int:pk>/",
+        "addon/<int:pk>/",
         weblate.addons.views.AddonDetail.as_view(),
         name="addon-detail",
+    ),
+    path(
+        "addon/<int:pk>/logs/",
+        weblate.addons.views.AddonLogs.as_view(),
+        name="addon-logs",
     ),
     path(
         "access/<name:project>/",
@@ -291,13 +207,8 @@ real_patterns = [
         name="manage-access",
     ),
     path(
-        "settings/<name:project>/",
-        weblate.trans.views.settings.change_project,
-        name="settings",
-    ),
-    path(
-        "settings/<name:project>/<name:component>/",
-        weblate.trans.views.settings.change_component,
+        "settings/<object_path:path>/",
+        weblate.trans.views.settings.change,
         name="settings",
     ),
     path(
@@ -371,7 +282,7 @@ real_patterns = [
         name="create-component-doc",
     ),
     path(
-        "contributor-agreement/<name:project>/<name:component>/",
+        "contributor-agreement/<object_path:path>",
         weblate.trans.views.agreement.agreement_confirm,
         name="contributor-agreement",
     ),
@@ -401,29 +312,14 @@ real_patterns = [
         name="delete-user",
     ),
     path(
-        "access/<name:project>/resend/",
-        weblate.trans.views.acl.resend_invitation,
-        name="resend_invitation",
-    ),
-    path(
         "access/<name:project>/set/",
         weblate.trans.views.acl.set_groups,
         name="set-groups",
     ),
     path(
-        "access/<name:project>/team/delete/",
-        weblate.trans.views.acl.delete_group,
-        name="delete-project-group",
-    ),
-    path(
         "access/<name:project>/team/create/",
         weblate.trans.views.acl.create_group,
         name="create-project-group",
-    ),
-    path(
-        "access/<name:project>/team/<int:pk>/",
-        weblate.trans.views.acl.edit_group,
-        name="edit-project-group",
     ),
     path(
         "token/<name:project>/create/",
@@ -450,120 +346,56 @@ real_patterns = [
     ),
     # VCS manipulation - commit
     path(
-        "commit/<name:project>/",
-        weblate.trans.views.git.commit_project,
-        name="commit_project",
-    ),
-    path(
-        "commit/<name:project>/<name:component>/",
-        weblate.trans.views.git.commit_component,
-        name="commit_component",
-    ),
-    path(
-        "commit/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.git.commit_translation,
-        name="commit_translation",
+        "commit/<object_path:path>/",
+        weblate.trans.views.git.commit,
+        name="commit",
     ),
     # VCS manipulation - update
     path(
-        "update/<name:project>/",
-        weblate.trans.views.git.update_project,
-        name="update_project",
-    ),
-    path(
-        "update/<name:project>/<name:component>/",
-        weblate.trans.views.git.update_component,
-        name="update_component",
-    ),
-    path(
-        "update/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.git.update_translation,
-        name="update_translation",
+        "update/<object_path:path>/",
+        weblate.trans.views.git.update,
+        name="update",
     ),
     # VCS manipulation - push
     path(
-        "push/<name:project>/",
-        weblate.trans.views.git.push_project,
-        name="push_project",
-    ),
-    path(
-        "push/<name:project>/<name:component>/",
-        weblate.trans.views.git.push_component,
-        name="push_component",
-    ),
-    path(
-        "push/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.git.push_translation,
-        name="push_translation",
+        "push/<object_path:path>/",
+        weblate.trans.views.git.push,
+        name="push",
     ),
     # VCS manipulation - reset
     path(
-        "reset/<name:project>/",
-        weblate.trans.views.git.reset_project,
-        name="reset_project",
-    ),
-    path(
-        "reset/<name:project>/<name:component>/",
-        weblate.trans.views.git.reset_component,
-        name="reset_component",
-    ),
-    path(
-        "reset/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.git.reset_translation,
-        name="reset_translation",
+        "reset/<object_path:path>/",
+        weblate.trans.views.git.reset,
+        name="reset",
     ),
     # VCS manipulation - cleanup
     path(
-        "cleanup/<name:project>/",
-        weblate.trans.views.git.cleanup_project,
-        name="cleanup_project",
-    ),
-    path(
-        "cleanup/<name:project>/<name:component>/",
-        weblate.trans.views.git.cleanup_component,
-        name="cleanup_component",
-    ),
-    path(
-        "cleanup/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.git.cleanup_translation,
-        name="cleanup_translation",
+        "cleanup/<object_path:path>/",
+        weblate.trans.views.git.cleanup,
+        name="cleanup",
     ),
     # VCS manipulation - force sync
     path(
-        "file-sync/<name:project>/",
-        weblate.trans.views.git.file_sync_project,
-        name="file_sync_project",
+        "file-sync/<object_path:path>/",
+        weblate.trans.views.git.file_sync,
+        name="file_sync",
+    ),
+    # VCS manipulation - force scan
+    path(
+        "file-scan/<object_path:path>/",
+        weblate.trans.views.git.file_scan,
+        name="file_scan",
     ),
     path(
-        "file-sync/<name:project>/<name:component>/",
-        weblate.trans.views.git.file_sync_component,
-        name="file_sync_component",
-    ),
-    path(
-        "file-sync/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.git.file_sync_translation,
-        name="file_sync_translation",
-    ),
-    path(
-        "progress/<name:project>/<name:component>/",
-        weblate.trans.views.settings.component_progress,
-        name="component_progress",
+        "progress/<object_path:path>/",
+        weblate.trans.views.settings.show_progress,
+        name="show_progress",
     ),
     # Announcements
     path(
-        "announcement/<name:project>/",
-        weblate.trans.views.settings.announcement_project,
-        name="announcement_project",
-    ),
-    path(
-        "announcement/<name:project>/<name:component>/",
-        weblate.trans.views.settings.announcement_component,
-        name="announcement_component",
-    ),
-    path(
-        "announcement/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.settings.announcement_translation,
-        name="announcement_translation",
+        "announcement/<object_path:path>/",
+        weblate.trans.views.settings.announcement,
+        name="announcement",
     ),
     path(
         "js/announcement/<int:pk>/delete/",
@@ -572,71 +404,39 @@ real_patterns = [
     ),
     # VCS manipulation - remove
     path(
-        "remove/<name:project>/",
-        weblate.trans.views.settings.remove_project,
-        name="remove_project",
-    ),
-    path(
-        "remove/<name:project>/<name:component>/",
-        weblate.trans.views.settings.remove_component,
-        name="remove_component",
-    ),
-    path(
-        "remove/<name:project>/-/<name:lang>/",
-        weblate.trans.views.settings.remove_project_language,
-        name="remove-project-language",
-    ),
-    path(
-        "remove/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.settings.remove_translation,
-        name="remove_translation",
+        "remove/<object_path:path>/",
+        weblate.trans.views.settings.remove,
+        name="remove",
     ),
     # Project renaming and moving
     path(
-        "rename/<name:project>/",
-        weblate.trans.views.settings.rename_project,
-        name="rename",
+        "rename/<object_path:path>/", weblate.trans.views.settings.rename, name="rename"
     ),
     path(
-        "rename/<name:project>/<name:component>/",
-        weblate.trans.views.settings.rename_component,
-        name="rename",
-    ),
-    path(
-        "move/<name:project>/<name:component>/",
-        weblate.trans.views.settings.move_component,
-        name="move",
+        "category/add/<object_path:path>/",
+        weblate.trans.views.settings.add_category,
+        name="add-category",
     ),
     # Alerts dismiss
     path(
-        "alerts/<name:project>/<name:component>/dismiss/",
+        "alerts/<object_path:path>/dismiss/",
         weblate.trans.views.settings.dismiss_alert,
         name="dismiss-alert",
     ),
     # Locking
     path(
-        "lock/<name:project>/",
-        weblate.trans.views.lock.lock_project,
-        name="lock_project",
+        "lock/<object_path:path>/",
+        weblate.trans.views.lock.lock,
+        name="lock",
     ),
     path(
-        "unlock/<name:project>/",
-        weblate.trans.views.lock.unlock_project,
-        name="unlock_project",
-    ),
-    path(
-        "lock/<name:project>/<name:component>/",
-        weblate.trans.views.lock.lock_component,
-        name="lock_component",
-    ),
-    path(
-        "unlock/<name:project>/<name:component>/",
-        weblate.trans.views.lock.unlock_component,
-        name="unlock_component",
+        "unlock/<object_path:path>/",
+        weblate.trans.views.lock.unlock,
+        name="unlock",
     ),
     # Screenshots
     path(
-        "screenshots/<name:project>/<name:component>/",
+        "screenshots/<object_path:path>/",
         weblate.screenshots.views.ScreenshotList.as_view(),
         name="screenshots",
     ),
@@ -756,7 +556,7 @@ real_patterns = [
     path(
         "manage/machinery/",
         management_access(weblate.machinery.views.ListMachineryGlobalView.as_view()),
-        name="machinery-list",
+        name="manage-machinery",
     ),
     path(
         "manage/machinery/<name:machinery>/",
@@ -792,36 +592,44 @@ real_patterns = [
     ),
     path(
         "languages/<name:lang>/<name:project>/",
-        weblate.lang.views.show_project,
-        name="project-language",
+        weblate.trans.views.basic.ProjectLanguageRedirectView.as_view(),
+        name="project-language-redirect",
+    ),
+    path(
+        "languages/<name:lang>/<name:project>/search/",
+        weblate.trans.views.basic.ProjectLanguageRedirectView.as_view(
+            pattern_name="search",
+        ),
+        name="project-language-search-redirect",
     ),
     # Checks browsing
-    path("checks/", weblate.checks.views.show_checks, name="checks"),
-    path("checks/<name:name>/", weblate.checks.views.show_check, name="show_check"),
+    path("checks/", weblate.checks.views.CheckList.as_view(), name="checks"),
     path(
-        "checks/<name:name>/<name:project>/",
-        weblate.checks.views.show_check_project,
-        name="show_check_project",
+        "checks/<name:name>/", weblate.checks.views.CheckList.as_view(), name="checks"
     ),
     path(
-        "checks/<name:name>/<name:project>/<name:component>/",
-        weblate.checks.views.show_check_component,
-        name="show_check_component",
+        "checks/-/<object_path:path>/",
+        weblate.checks.views.CheckList.as_view(),
+        name="checks",
+    ),
+    path(
+        "checks/<name:name>/<object_path:path>/",
+        weblate.checks.views.CheckList.as_view(),
+        name="checks",
     ),
     # Changes browsing
     path("changes/", ChangesView.as_view(), name="changes"),
+    path("changes/browse/<object_path:path>/", ChangesView.as_view(), name="changes"),
     path("changes/csv/", ChangesCSVView.as_view(), name="changes-csv"),
+    path(
+        "changes/csv/<object_path:path>/", ChangesCSVView.as_view(), name="changes-csv"
+    ),
     path("changes/render/<int:pk>/", show_change, name="show_change"),
     # Notification hooks
     path(
-        "hooks/update/<name:project>/<name:component>/",
-        weblate.trans.views.hooks.update_component,
-        name="hook-component",
-    ),
-    path(
-        "hooks/update/<name:project>/",
-        weblate.trans.views.hooks.update_project,
-        name="hook-project",
+        "hooks/update/<object_path:path>",
+        weblate.trans.views.hooks.update,
+        name="update-hook",
     ),
     path(
         "hooks/<slug:service>/",
@@ -835,13 +643,8 @@ real_patterns = [
     ),
     # Stats exports
     path(
-        "exports/stats/<name:project>/<name:component>/",
+        "exports/stats/<object_path:path>/",
         weblate.trans.views.api.export_stats,
-        name="export_stats",
-    ),
-    path(
-        "exports/stats/<name:project>/",
-        weblate.trans.views.api.export_stats_project,
         name="export_stats",
     ),
     # RSS exports
@@ -851,57 +654,46 @@ real_patterns = [
         LanguageChangesFeed(),
         name="rss-language",
     ),
-    path("exports/rss/<name:project>/", ProjectChangesFeed(), name="rss-project"),
-    path(
-        "exports/rss/<name:project>/<name:component>/",
-        ComponentChangesFeed(),
-        name="rss-component",
-    ),
-    path(
-        "exports/rss/<name:project>/<name:component>/<name:lang>/",
-        TranslationChangesFeed(),
-        name="rss-translation",
-    ),
+    path("exports/rss/<object_path:path>/", TranslationChangesFeed(), name="rss"),
     # Engagement widgets
     path("exports/og.png", weblate.trans.views.widgets.render_og, name="og-image"),
     path(
         f"widgets/<name:project>/-/{widget_pattern}",
-        weblate.trans.views.widgets.render_widget,
-        name="widget-image",
+        weblate.trans.views.widgets.WidgetRedirectView.as_view(),
     ),
     path(
         f"widgets/<name:project>/<name:lang>/{widget_pattern}",
-        weblate.trans.views.widgets.render_widget,
-        name="widget-image",
+        weblate.trans.views.widgets.WidgetRedirectView.as_view(),
     ),
     path(
         f"widgets/<name:project>/-/<name:component>/{widget_pattern}",
-        weblate.trans.views.widgets.render_widget,
-        name="widget-image",
+        weblate.trans.views.widgets.WidgetRedirectView.as_view(),
     ),
     path(
         f"widgets/<name:project>/<name:lang>/<name:component>/{widget_pattern}",
+        weblate.trans.views.widgets.WidgetRedirectView.as_view(),
+    ),
+    path(
+        f"widget/<object_path:path>/{widget_pattern}",
         weblate.trans.views.widgets.render_widget,
         name="widget-image",
     ),
     path(
-        "widgets/<name:project>/",
+        "widgets/<object_path:path>/",
         weblate.trans.views.widgets.widgets,
         name="widgets",
     ),
     path(
         "widgets/",
         RedirectView.as_view(
-            url=f"/{URL_PREFIX}projects/",
-            permanent=True,
+            pattern_name="projects", permanent=True, query_string=True
         ),
     ),
     # Data exports pages
     path(
         "data/",
         RedirectView.as_view(
-            url=f"/{URL_PREFIX}projects/",
-            permanent=True,
+            pattern_name="projects", permanent=True, query_string=True
         ),
     ),
     path(
@@ -951,27 +743,17 @@ real_patterns = [
         name="js-unit-translations",
     ),
     path(
-        "js/git/<name:project>/",
-        weblate.trans.views.js.git_status_project,
-        name="git_status_project",
+        "js/git/<object_path:path>/",
+        weblate.trans.views.js.git_status,
+        name="git_status",
     ),
     path(
-        "js/git/<name:project>/<name:component>/",
-        weblate.trans.views.js.git_status_component,
-        name="git_status_component",
-    ),
-    path(
-        "js/git/<name:project>/<name:component>/<name:lang>/",
-        weblate.trans.views.js.git_status_translation,
-        name="git_status_translation",
-    ),
-    path(
-        "js/zen/<name:project>/<name:component>/<name:lang>/",
+        "js/zen/<object_path:path>/",
         weblate.trans.views.edit.load_zen,
         name="load_zen",
     ),
     path(
-        "js/save-zen/<name:project>/<name:component>/<name:lang>/",
+        "js/save-zen/<object_path:path>/",
         weblate.trans.views.edit.save_zen,
         name="save_zen",
     ),
@@ -987,14 +769,13 @@ real_patterns = [
         name="css-custom",
     ),
     # Admin interface
-    path(
-        "admin/",
-        include(
-            (weblate.wladmin.sites.SITE.urls, "weblate.wladmin"), namespace="admin"
-        ),
-    ),
+    path("admin/", admin.site.urls),
     # Weblate management interface
     path("manage/", weblate.wladmin.views.manage, name="manage"),
+    path("manage/support/", weblate.wladmin.views.support_form, name="manage-support"),
+    path(
+        "manage/addons/", weblate.addons.views.AddonList.as_view(), name="manage-addons"
+    ),
     path("manage/tools/", weblate.wladmin.views.tools, name="manage-tools"),
     path(
         "manage/users/",
@@ -1002,14 +783,14 @@ real_patterns = [
         name="manage-users",
     ),
     path(
-        "manage/groups/",
-        weblate.wladmin.views.GroupListView.as_view(),
-        name="manage-groups",
+        "manage/teams/",
+        weblate.wladmin.views.TeamListView.as_view(),
+        name="manage-teams",
     ),
     path(
-        "manage/groups/<int:pk>/",
-        weblate.wladmin.views.GroupUpdateView.as_view(),
-        name="manage-group",
+        "teams/<int:pk>/",
+        weblate.auth.views.TeamUpdateView.as_view(),
+        name="team",
     ),
     path(
         "manage/users/check/",
@@ -1031,21 +812,33 @@ real_patterns = [
         weblate.wladmin.views.performance,
         name="manage-performance",
     ),
-    # Auth
+    # Accounts
     path("accounts/", include(weblate.accounts.urls)),
     # Auth
     path("api/", include((weblate.api.urls, "weblate.api"), namespace="api")),
+    # OpenAPI schema
+    path("api/schema/", SpectacularAPIView.as_view(), name="api-schema"),
+    # API documentation
+    path(
+        "api/docs/", SpectacularRedocView.as_view(url_name="api-schema"), name="redoc"
+    ),
     # Static pages
     path("contact/", weblate.accounts.views.contact, name="contact"),
     path("hosting/", weblate.accounts.views.hosting, name="hosting"),
     path("trial/", weblate.accounts.views.trial, name="trial"),
     path("about/", weblate.trans.views.about.AboutView.as_view(), name="about"),
+    path("donate/", weblate.trans.views.about.DonateView.as_view(), name="donate"),
     path("keys/", weblate.trans.views.about.KeysView.as_view(), name="keys"),
     path("stats/", weblate.trans.views.about.StatsView.as_view(), name="stats"),
     # User pages
     path("user/", weblate.accounts.views.UserList.as_view(), name="user_list"),
     path(
         "user/<name:user>/", weblate.accounts.views.UserPage.as_view(), name="user_page"
+    ),
+    path(
+        "user/<name:user>/contributions/",
+        weblate.accounts.views.user_contributions,
+        name="user_contributions",
     ),
     path(
         "user/<name:user>/suggestions/",
@@ -1073,21 +866,8 @@ real_patterns = [
     ),
     # Site wide search
     path("search/", weblate.trans.views.search.search, name="search"),
-    path("search/<name:project>/", weblate.trans.views.search.search, name="search"),
     path(
-        "search/<name:project>/<name:component>/",
-        weblate.trans.views.search.search,
-        name="search",
-    ),
-    path(
-        "languages/<name:lang>/-/search/",
-        weblate.trans.views.search.search,
-        name="search",
-    ),
-    path(
-        "languages/<name:lang>/<name:project>/search/",
-        weblate.trans.views.search.search,
-        name="search",
+        "search/<object_path:path>/", weblate.trans.views.search.search, name="search"
     ),
     # Health check
     path("healthz/", weblate.trans.views.basic.healthz, name="healthz"),
@@ -1138,13 +918,12 @@ real_patterns = [
     # Redirects for .well-known
     path(
         ".well-known/change-password",
-        RedirectView.as_view(url=f"/{URL_PREFIX}accounts/password/", permanent=True),
+        RedirectView.as_view(pattern_name="password", permanent=True),
     ),
 ]
 
 # Billing integration
 if "weblate.billing" in settings.INSTALLED_APPS:
-    # pylint: disable=wrong-import-position
     import weblate.billing.views
 
     real_patterns += [
@@ -1160,47 +939,55 @@ if "weblate.billing" in settings.INSTALLED_APPS:
 
 # Git exporter integration
 if "weblate.gitexport" in settings.INSTALLED_APPS:
-    # pylint: disable=wrong-import-position
     import weblate.gitexport.views
 
     real_patterns += [
         # Redirect clone from the Weblate project URL
         path(
-            "projects/<name:project>/<name:component>/<gitpath:path>",
+            "projects/<object_path:path>.git/<git_path:git_request>",
             RedirectView.as_view(
-                url=f"/{URL_PREFIX}git/%(project)s/%(component)s/%(path)s",
+                pattern_name="git-export",
                 permanent=True,
                 query_string=True,
             ),
         ),
         path(
-            "projects/<name:project>/<name:component>.git/<gitpath:path>",
+            "projects/<object_path:path>/<git_path:git_request>",
             RedirectView.as_view(
-                url=f"/{URL_PREFIX}git/%(project)s/%(component)s/%(path)s",
+                pattern_name="git-export",
                 permanent=True,
                 query_string=True,
             ),
         ),
         # Redirect clone in case user adds .git to the path
         path(
-            "git/<name:project>/<name:component>.git/<optionalpath:path>",
+            "git/<object_path:path>.git/<git_path:git_request>",
             RedirectView.as_view(
-                url=f"/{URL_PREFIX}git/%(project)s/%(component)s/%(path)s",
+                pattern_name="git-export",
                 permanent=True,
                 query_string=True,
             ),
         ),
-        # Redirect when cloning on component URL
+        # Redirect accessing Git URL with a browser
         path(
-            "projects/<name:project>/<name:component>/info/refs",
+            "git/<object_path:path>.git/",
             RedirectView.as_view(
-                url=f"/{URL_PREFIX}git/%(project)s/%(component)s/%(path)s",
+                pattern_name="show",
                 permanent=True,
                 query_string=True,
             ),
         ),
         path(
-            "git/<name:project>/<name:component>/<optionalpath:path>",
+            "git/<object_path:path>/",
+            RedirectView.as_view(
+                pattern_name="show",
+                permanent=True,
+                query_string=True,
+            ),
+        ),
+        # Actual git server
+        path(
+            "git/<object_path:path>/<git_path:git_request>",
             weblate.gitexport.views.git_export,
             name="git-export",
         ),
@@ -1208,53 +995,50 @@ if "weblate.gitexport" in settings.INSTALLED_APPS:
 
 # Legal integartion
 if "weblate.legal" in settings.INSTALLED_APPS:
-    # pylint: disable=wrong-import-position
-    import weblate.legal.views
-
-    real_patterns += [
-        path(
-            "legal/",
-            include(("weblate.legal.urls", "weblate.legal"), namespace="legal"),
-        ),
-        path(
-            "security.txt",
-            TemplateView.as_view(
-                template_name="security.txt", content_type="text/plain"
+    real_patterns.extend(
+        (
+            path(
+                "legal/",
+                include(("weblate.legal.urls", "weblate.legal"), namespace="legal"),
             ),
-        ),
-    ]
+            path(
+                "security.txt",
+                TemplateView.as_view(
+                    template_name="security.txt", content_type="text/plain"
+                ),
+            ),
+        )
+    )
 
 # Serving media files in DEBUG mode
 if settings.DEBUG:
-    real_patterns += [
+    real_patterns.append(
         path(
             "media/<path:path>",
             django.views.static.serve,
             {"document_root": settings.MEDIA_ROOT},
         )
-    ]
+    )
 
 # Django debug toolbar integration
 if settings.DEBUG and "debug_toolbar" in settings.INSTALLED_APPS:
-    # pylint: disable=wrong-import-position
-    import debug_toolbar
-
-    real_patterns += [path("__debug__/", include(debug_toolbar.urls))]
+    real_patterns.append(
+        path("__debug__/", include("debug_toolbar.urls")),
+    )
 
 # Hosted Weblate integration
 if "wlhosted.integrations" in settings.INSTALLED_APPS:
-    # pylint: disable=wrong-import-position
     from wlhosted.integrations.views import CreateBillingView
 
-    real_patterns += [
-        path("create/billing/", CreateBillingView.as_view(), name="create-billing")
-    ]
+    real_patterns.append(
+        path("create/billing/", CreateBillingView.as_view(), name="create-billing"),
+    )
 
 # Django SAML2 Identity Provider
 if "djangosaml2idp" in settings.INSTALLED_APPS:
-    real_patterns += [
+    real_patterns.append(
         path("idp/", include("djangosaml2idp.urls")),
-    ]
+    )
 
 # Handle URL prefix configuration
 if not URL_PREFIX:

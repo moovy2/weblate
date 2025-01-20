@@ -1,33 +1,49 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
+import contextlib
+from typing import TYPE_CHECKING
+
+from django.conf import settings
+from django.http.request import UnreadablePostError
+
+if TYPE_CHECKING:
+    from weblate.auth.models import AuthenticatedHttpRequest
+
+
+RATELIMIT_LIMIT_HEADER = "X-RateLimit-Limit"
+RATELIMIT_REMAINING_HEADER = "X-RateLimit-Remaining"
+RATELIMIT_RESET_HEADER = "X-RateLimit-Reset"
 
 
 class ThrottlingMiddleware:
-    def __init__(self, get_response=None):
+    def __init__(self, get_response=None) -> None:
         self.get_response = get_response
 
-    def __call__(self, request):
+    def __call__(self, request: AuthenticatedHttpRequest):
         response = self.get_response(request)
+
+        # API payload workaround
+        if request.method != "GET" and request.path_info.startswith(
+            f"{settings.URL_PREFIX}/api"
+        ):
+            # Make sure full request is read. Django REST Framework lazily loads
+            # request body when needed, but keeping the payload in the stream the client
+            # ends up with an error:
+            #
+            # - HTTP/1.1: transfer closed with outstanding read data remaining
+            # - HTTP/2: stream was not closed cleanly
+            with contextlib.suppress(UnreadablePostError):
+                request.read()
+
+        # Actual throttling
         throttling = request.META.get("throttling_state", None)
         if throttling is not None:
-            response["X-RateLimit-Limit"] = throttling.num_requests
-            response["X-RateLimit-Remaining"] = throttling.num_requests - len(
+            response[RATELIMIT_LIMIT_HEADER] = throttling.num_requests
+            response[RATELIMIT_REMAINING_HEADER] = throttling.num_requests - len(
                 throttling.history
             )
             if throttling.history:
@@ -36,5 +52,5 @@ class ThrottlingMiddleware:
                 )
             else:
                 remaining_duration = throttling.duration
-            response["X-RateLimit-Reset"] = int(remaining_duration)
+            response[RATELIMIT_RESET_HEADER] = int(remaining_duration)
         return response

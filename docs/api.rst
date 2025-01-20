@@ -7,13 +7,18 @@
 Weblate's REST API
 ==================
 
-.. versionadded:: 2.6
-
-    The REST API is available since Weblate 2.6.
-
 The API is accessible on the ``/api/`` URL and it is based on
 `Django REST framework <https://www.django-rest-framework.org/>`_.
 You can use it directly or by :ref:`wlc`.
+
+The API is also documented using OpenAPI 3.0 on the ``/api/schema/`` URL, you
+can browse at ``/api/docs/``.
+
+.. note::
+
+   OpenAPI is available as a feature preview. The documentation is most likely
+   incomplete at this point and subject to change. Please consult the
+   documentation below for more detailed information on the API.
 
 .. _api-generic:
 
@@ -35,6 +40,11 @@ token, which you can get in your profile. Use it in the ``Authorization`` header
                    by default ``json`` and ``api`` are supported. The
                    latter provides web browser interface for API.
     :query page: Returns given page of paginated results (use `next` and `previous` fields in response to automate the navigation).
+    :query page_size: Return the given number of items per request.
+                      The default is 50 and the maximum is 1000.
+                      For the `units` endpoints the default is 100 with
+                      a maximum of 10000. The default value is also
+                      configurable using the `PAGE_SIZE` setting.
     :reqheader Accept: the response content type depends on
                        :http:header:`Accept` header
     :reqheader Authorization: optional token to authenticate as
@@ -47,7 +57,7 @@ token, which you can get in your profile. Use it in the ``Authorization`` header
     :>json string next: next page URL for object lists
     :>json string previous: previous page URL for object lists
     :>json array results: results for object lists
-    :>json string url: URL to access this resource using API
+    :>json string url: URL to access this resource using the API
     :>json string web_url: URL to access this resource using web browser
     :status 200: when request was correctly handled
     :status 201: when a new object was created successfully
@@ -63,7 +73,7 @@ Authentication tokens
 
    Project scoped tokens were introduced in the 4.10 release.
 
-Each user has his personal access token which can be obtained in the user
+Each user has a personal access token which can be obtained in the user
 profile. Newly generated user tokens have the ``wlu_`` prefix.
 
 It is possible to create project scoped tokens for API access to given project
@@ -160,6 +170,17 @@ form submission (:mimetype:`application/x-www-form-urlencoded`) or as JSON
         -H "Authorization: Token TOKEN" \
         http://example.com/api/components/hello/weblate/repository/
 
+.. _api-category:
+
+Components and categories
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To access a component which is nested inside a :ref:`category`, you need to URL
+encode the category name into a component name separated with a slash. For
+example ``usage`` placed in a ``docs`` category needs to be used as
+``docs%252Fusage``. Full URL in this case would be for example
+``https://example.com/api/components/hello/docs%252Fusage/repository/``.
+
 .. _api-rate:
 
 API rate limiting
@@ -178,13 +199,13 @@ In the Docker container this can be configured using
 
 The status of rate limiting is reported in following headers:
 
-+---------------------------+---------------------------------------------------+
-| ``X-RateLimit-Limit``     | Rate limiting limit of requests to perform        |
-+---------------------------+---------------------------------------------------+
-| ``X-RateLimit-Remaining`` | Remaining limit of requests                       |
-+---------------------------+---------------------------------------------------+
-| ``X-RateLimit-Reset``     | Number of seconds until ratelimit window resets   |
-+---------------------------+---------------------------------------------------+
++---------------------------+------------------------------------------------------+
+| ``X-RateLimit-Limit``     | Allowed number of requests to perform                |
++---------------------------+------------------------------------------------------+
+| ``X-RateLimit-Remaining`` | Remaining number of requests to perform              |
++---------------------------+------------------------------------------------------+
+| ``X-RateLimit-Reset``     | Number of seconds until the rate-limit window resets |
++---------------------------+------------------------------------------------------+
 
 .. versionchanged:: 4.1
 
@@ -196,6 +217,17 @@ The status of rate limiting is reported in following headers:
    :ref:`user-rate`,
    :envvar:`WEBLATE_API_RATELIMIT_ANON`,
    :envvar:`WEBLATE_API_RATELIMIT_USER`
+
+.. _api-errors:
+
+Error responses
+~~~~~~~~~~~~~~~
+
+.. versionchanged:: 5.10
+
+   Error responses were endpoint specific before this release.
+
+Weblate error responses are formatted based on :doc:`drf-standardized-error:error_response`.
 
 
 API Entry Point
@@ -245,6 +277,9 @@ Users
     Returns a list of users if you have permissions to see manage users. If not, then you get to see
     only your own details.
 
+    :query string username: Username to search for
+    :query int id: User ID to search for
+
     .. seealso::
 
         Users object attributes are documented at :http:get:`/api/users/(str:username)/`.
@@ -279,6 +314,7 @@ Users
     :>json boolean is_active: whether the user is active
     :>json boolean is_bot: whether the user is bot (used for project scoped tokens)
     :>json string date_joined: date the user is created
+    :>json string last_login: date the user last signed in
     :>json array groups: link to associated groups; see :http:get:`/api/groups/(int:id)/`
 
     **Example JSON data:**
@@ -455,7 +491,7 @@ Groups
 
 .. http:get:: /api/groups/(int:id)/
 
-    Returns information about group.
+    Returns information about the group.
 
     :param id: Group's ID
     :type id: int
@@ -504,7 +540,7 @@ Groups
     :type id: int
     :>json string name: name of a group
     :>json int project_selection: integer corresponding to group of projects
-    :>json int language_selection: integer corresponding to group of Languages
+    :>json int language_selection: integer corresponding to group of languages
 
 .. http:patch:: /api/groups/(int:id)/
 
@@ -599,6 +635,28 @@ Groups
     :param component_list_id: The unique componentlist ID
     :type component_list_id: int
 
+.. http:post:: /api/groups/(int:id)/admins/
+
+    .. versionadded:: 5.5
+
+    Add user to team admins.
+
+    :param id: Group's ID
+    :type id: int
+    :form string user_id: The user's ID
+
+.. http:delete:: /api/groups/(int:id)/admins/(int:user_id)
+
+    .. versionadded:: 5.5
+
+    Delete user from team admins.
+
+    :param id: Group's ID
+    :type id: int
+    :param user_id: The user's ID
+    :type user_id: integer
+
+
 
 Roles
 +++++
@@ -623,9 +681,9 @@ Roles
 
 .. http:get:: /api/roles/(int:id)/
 
-    Returns information about a role.
+    Returns information about the role.
 
-    :param id: Role ID
+    :param id: Role's ID
     :type id: int
     :>json string name: Role name
     :>json array permissions: list of codenames of permissions
@@ -697,7 +755,7 @@ Languages
 
 .. http:get:: /api/languages/(string:language)/
 
-    Returns information about a language.
+    Returns information about the language.
 
     :param language: Language code
     :type language: string
@@ -770,21 +828,10 @@ Languages
 
     :param language: Language code
     :type language: string
-    :>json int total: total number of strings
-    :>json int total_words: total number of words
-    :>json timestamp last_change: last changes in the language
-    :>json int recent_changes: total number of changes
-    :>json int translated: number of translated strings
-    :>json float translated_percent: percentage of translated strings
-    :>json int translated_words: number of translated words
-    :>json int translated_words_percent: percentage of translated words
-    :>json int translated_chars: number of translated characters
-    :>json int translated_chars_percent: percentage of translated characters
-    :>json int total_chars: number of total characters
-    :>json int fuzzy: number of fuzzy (marked for edit) strings
-    :>json int fuzzy_percent: percentage of fuzzy (marked for edit) strings
-    :>json int failing: number of failing strings
-    :>json int failing: percentage of failing strings
+
+    .. seealso::
+
+       Returned attributes are described in :ref:`api-statistics`.
 
 
 Projects
@@ -800,8 +847,6 @@ Projects
 
 .. http:post:: /api/projects/
 
-    .. versionadded:: 3.9
-
     Creates a new project.
 
     :param name: Project name
@@ -813,7 +858,7 @@ Projects
 
 .. http:get:: /api/projects/(string:project)/
 
-    Returns information about a project.
+    Returns information about the project.
 
     :param project: Project URL slug
     :type project: string
@@ -823,6 +868,7 @@ Projects
     :>json string components_list_url: URL to components list; see :http:get:`/api/projects/(string:project)/components/`
     :>json string repository_url: URL to repository status; see :http:get:`/api/projects/(string:project)/repository/`
     :>json string changes_list_url: URL to changes list; see :http:get:`/api/projects/(string:project)/changes/`
+    :>json string credits_url: URL to list contributor credits; see :http:get:`/api/projects/(string:project)/credits/`
     :>json boolean translation_review: :ref:`project-translation_review`
     :>json boolean source_review: :ref:`project-source_review`
     :>json boolean set_language_team: :ref:`project-set_language_team`
@@ -864,8 +910,6 @@ Projects
 
 .. http:delete:: /api/projects/(string:project)/
 
-    .. versionadded:: 3.9
-
     Deletes a project.
 
     :param project: Project URL slug
@@ -880,9 +924,21 @@ Projects
     :type project: string
     :>json array results: array of component objects; see :http:get:`/api/changes/(int:id)/`
 
+.. http:get:: /api/projects/(string:project)/file/
+
+    .. versionadded:: 5.5
+
+    Downloads all available translations associated with the project as an archive file using the requested format and language.
+
+    :param project: Project URL slug
+    :type project: string
+
+    :query string format: The archive format to use; If not specified, defaults to ``zip``; Supported formats: ``zip`` and ``zip:CONVERSION`` where ``CONVERSION`` is one of converters listed at :ref:`download`.
+    :query string language_code: The language code to download; If not specified, all languages are included.
+
 .. http:get:: /api/projects/(string:project)/repository/
 
-    Returns information about VCS repository status. This endpoint contains
+    Returns information about the VCS repository status. This endpoint contains
     only an overall summary for all repositories for the project. To get more detailed
     status use :http:get:`/api/components/(string:project)/(string:component)/repository/`.
 
@@ -910,7 +966,7 @@ Projects
 
     :param project: Project URL slug
     :type project: string
-    :<json string operation: Operation to perform: one of ``push``, ``pull``, ``commit``, ``reset``, ``cleanup``, ``file-sync``
+    :<json string operation: Operation to perform: one of ``push``, ``pull``, ``commit``, ``reset``, ``cleanup``, ``file-sync``, ``file-scan``
     :>json boolean result: result of the operation
 
     **CURL example:**
@@ -960,8 +1016,6 @@ Projects
     :>json array results: array of component objects; see :http:get:`/api/components/(string:project)/(string:component)/`
 
 .. http:post:: /api/projects/(string:project)/components/
-
-    .. versionadded:: 3.9
 
     .. versionchanged:: 4.3
 
@@ -1122,8 +1176,6 @@ Projects
 
     Returns paginated statistics for all languages within a project.
 
-    .. versionadded:: 3.8
-
     :param project: Project URL slug
     :type project: string
     :>json array results: array of translation statistics objects
@@ -1140,16 +1192,86 @@ Projects
 
     Returns statistics for a project.
 
-    .. versionadded:: 3.8
+    :param project: Project URL slug
+    :type project: string
+
+    .. seealso::
+
+       Returned attributes are described in :ref:`api-statistics`.
+
+.. http:get:: /api/projects/(string:project)/categories/
+
+   .. versionadded:: 5.0
+
+    Returns categories for a project. See :http:get:`/api/categories/(int:id)/` for field definitions.
 
     :param project: Project URL slug
     :type project: string
-    :>json int total: total number of strings
-    :>json int translated: number of translated strings
-    :>json float translated_percent: percentage of translated strings
-    :>json int total_words: total number of words
-    :>json int translated_words: number of translated words
-    :>json float words_percent: percentage of translated words
+
+.. http:get:: /api/projects/(string:project)/labels/
+
+   .. versionadded:: 5.3
+
+    Returns labels for a project.
+
+    :param project: Project URL slug
+    :type project: string
+    :>json int id: ID of the label
+    :>json string name: name of the label
+    :>json string color: color of the label
+
+.. http:post:: /api/projects/(string:project)/labels/
+
+   .. versionadded:: 5.3
+
+    Creates a label for a project.
+
+    :param project: Project URL slug
+    :type project: string
+    :<json string name: name of the label
+    :<json string color: color of the label
+
+.. http:get:: /api/projects/(string:project)/credits/
+
+    Returns contributor credits for a project.
+
+    .. versionadded:: 5.7
+
+    :param project: Project URL slug
+    :type project: string
+    :param start: Lower-bound ISO 8601 timestamp (mandatory)
+    :type start: date
+    :param end: Upper-bound ISO 8601 timestamp (mandatory)
+    :type end: date
+    :param lang: Language code to search for
+    :type lang: source_language
+    :>json string email: Email of the contributor
+    :>json string full_name: Full name of the contributor
+    :>json string change_count: Number of changes done in the time range
+
+
+.. http:get:: /api/projects/{string:project}/machinery_settings/
+
+    .. versionadded:: 5.9
+
+    Returns automatic suggestion settings for a project, consisting of the configurations defined for each translation service installed.
+
+    :param project: Project URL slug
+    :type project: string
+    :>json object suggestion_settings: Configuration for all installed services.
+
+
+.. http:post:: /api/projects/{string:project}/machinery_settings/
+
+    .. versionadded:: 5.9
+
+    Create or update the service configuration for a project.
+
+    :param project: Project URL slug
+    :type project: string
+    :form string service: Service name
+    :form string configuration: Service configuration in JSON
+
 
 Components
 ++++++++++
@@ -1168,7 +1290,7 @@ Components
 
 .. http:get:: /api/components/(string:project)/(string:component)/
 
-    Returns information about translation component.
+    Returns information about the translation component.
 
     :param project: Project URL slug
     :type project: string
@@ -1178,10 +1300,12 @@ Components
     :>json string name: :ref:`component-name`
     :>json string slug: :ref:`component-slug`
     :>json string vcs: :ref:`component-vcs`
-    :>json string repo: :ref:`component-repo`
+    :>json string linked_component: component whose repository is linked via :ref:`internal-urls`
+    :>json string repo: :ref:`component-repo`, this is the actual repository URL even when :ref:`internal-urls` are used, use ``linked_component`` to detect this situation
     :>json string git_export: :ref:`component-git_export`
-    :>json string branch: :ref:`component-branch`
-    :>json string push_branch: :ref:`component-push_branch`
+    :>json string branch: :ref:`component-branch`, this is the actual repository branch even when :ref:`internal-urls` are used
+    :>json string push: :ref:`component-push`, this is the actual repository URL even when :ref:`internal-urls` are used
+    :>json string push_branch: :ref:`component-push_branch`, this is the actual repository branch even when :ref:`internal-urls` are used
     :>json string filemask: :ref:`component-filemask`
     :>json string template: :ref:`component-template`
     :>json string edit_template: :ref:`component-edit_template`
@@ -1193,7 +1317,6 @@ Components
     :>json string new_lang: :ref:`component-new_lang`
     :>json string language_code_style: :ref:`component-language_code_style`
     :>json object source_language: source language object; see :http:get:`/api/languages/(string:language)/`
-    :>json string push: :ref:`component-push`
     :>json string check_flags: :ref:`component-check_flags`
     :>json string priority: :ref:`component-priority`
     :>json string enforced_checks: :ref:`component-enforced_checks`
@@ -1212,15 +1335,19 @@ Components
     :>json string suggestion_voting: :ref:`component-suggestion_voting`
     :>json string suggestion_autoaccept: :ref:`component-suggestion_autoaccept`
     :>json string push_on_commit: :ref:`component-push_on_commit`
+    :>json bool locked: Whether component is locked, this field is read-only; see :http:get:`/api/components/(string:project)/(string:component)/lock/`
     :>json string commit_pending_age: :ref:`component-commit_pending_age`
     :>json string auto_lock_error: :ref:`component-auto_lock_error`
     :>json string language_regex: :ref:`component-language_regex`
     :>json string variant_regex: :ref:`component-variant_regex`
+    :>json bool is_glossary: :ref:`component-is_glossary`
+    :>json string glossary_color: :ref:`component-glossary_color`
     :>json string repository_url: URL to repository status; see :http:get:`/api/components/(string:project)/(string:component)/repository/`
     :>json string translations_url: URL to translations list; see :http:get:`/api/components/(string:project)/(string:component)/translations/`
     :>json string lock_url: URL to lock status; see :http:get:`/api/components/(string:project)/(string:component)/lock/`
     :>json string changes_list_url: URL to changes list; see :http:get:`/api/components/(string:project)/(string:component)/changes/`
     :>json string task_url: URL to a background task (if any); see :http:get:`/api/tasks/(str:uuid)/`
+    :>json string credits_url: URL to list contributor credits; see :http:get:`/api/components/(string:project)/(string:component)/credits/`
 
     **Example JSON data:**
 
@@ -1370,8 +1497,6 @@ Components
 
 .. http:delete:: /api/components/(string:project)/(string:component)/
 
-    .. versionadded:: 3.9
-
     Deletes a component.
 
     :param project: Project URL slug
@@ -1379,7 +1504,7 @@ Components
     :param component: Component URL slug
     :type component: string
 
-.. http:get::  /api/components/(string:project)/(string:component)/changes/
+.. http:get:: /api/components/(string:project)/(string:component)/changes/
 
     Returns a list of component changes. This is essentially a component scoped
     :http:get:`/api/changes/` accepting same params.
@@ -1402,9 +1527,9 @@ Components
     :param component: Component URL slug
     :type component: string
 
-    :query string format: The archive format to use; If not specified, defaults to ``zip``; Supported formats: ``zip``
+    :query string format: The archive format to use; If not specified, defaults to ``zip``; Supported formats: ``zip`` and ``zip:CONVERSION`` where ``CONVERSION`` is one of converters listed at :ref:`download`.
 
-.. http:get::  /api/components/(string:project)/(string:component)/screenshots/
+.. http:get:: /api/components/(string:project)/(string:component)/screenshots/
 
     Returns a list of component screenshots.
 
@@ -1485,7 +1610,7 @@ Components
 
 .. http:get:: /api/components/(string:project)/(string:component)/repository/
 
-    Returns information about VCS repository status.
+    Returns information about the VCS repository status.
 
     The response is same as for :http:get:`/api/projects/(string:project)/repository/`.
 
@@ -1663,13 +1788,14 @@ Components
 
     Returns paginated statistics for all translations within component.
 
-    .. versionadded:: 2.7
-
     :param project: Project URL slug
     :type project: string
     :param component: Component URL slug
     :type component: string
-    :>json array results: array of translation statistics objects; see :http:get:`/api/translations/(string:project)/(string:component)/(string:language)/statistics/`
+
+    .. seealso::
+
+       Returned attributes are described in :ref:`api-statistics`.
 
 .. http:get:: /api/components/(string:project)/(string:component)/links/
 
@@ -1708,6 +1834,23 @@ Components
     :param project_slug: Slug of the project to remove
     :type project_slug: string
 
+.. http:get:: /api/components/(string:project)/(string:component)/credits/
+
+    Returns contributor credits for a project.
+
+    .. versionadded:: 5.7
+
+    :param project: Project URL slug
+    :type project: string
+    :param start: Lower-bound ISO 8601 timestamp (mandatory)
+    :type start: date
+    :param end: Upper-bound ISO 8601 timestamp (mandatory)
+    :type end: date
+    :param lang: Language code to search for
+    :type lang: source_language
+    :>json string email: Email of the contributor
+    :>json string full_name: Full name of the contributor
+    :>json string change_count: Number of changes done in the time range
 
 Translations
 ++++++++++++
@@ -1722,7 +1865,7 @@ Translations
 
 .. http:get:: /api/translations/(string:project)/(string:component)/(string:language)/
 
-    Returns information about a translation.
+    Returns information about the translation.
 
     :param project: Project URL slug
     :type project: string
@@ -1830,8 +1973,6 @@ Translations
 
 .. http:delete:: /api/translations/(string:project)/(string:component)/(string:language)/
 
-    .. versionadded:: 3.9
-
     Deletes a translation.
 
     :param project: Project URL slug
@@ -1865,7 +2006,7 @@ Translations
     :type component: string
     :param language: Translation language code
     :type language: string
-    :param q: Search query string :ref:`Searching` (optional)
+    :param q: Search query string :doc:`/user/search` (optional)
     :type q: string
     :>json array results: array of component objects; see :http:get:`/api/units/(int:id)/`
 
@@ -1879,8 +2020,12 @@ Translations
     :type component: string
     :param language: Translation language code
     :type language: string
-    :<json string key: Name of translation unit (used as key or context)
-    :<json array value: Source strings (use single string if not creating plural)
+    :<json string key: *Monolingual translations:* Key of translation unit
+    :<json array value: *Monolingual translations:* Source strings (use single string if not creating plural)
+    :<json string context: *Bilingual translations:* Context of a translation unit
+    :<json array source: *Bilingual translations:* Source strings (use single string if not creating plural)
+    :<json array target: *Bilingual translations:* Target strings (use single string if not creating plural)
+    :<json int state: String state; see :http:get:`/api/units/(int:id)/`
     :>json object unit: newly created unit; see :http:get:`/api/units/(int:id)/`
 
     .. seealso::
@@ -1917,8 +2062,11 @@ Translations
         parameter differs and without such parameter you get translation file
         as stored in VCS.
 
-    :query format: File format to use; if not specified no format conversion happens; supported file formats: ``po``, ``mo``, ``xliff``, ``xliff11``, ``tbx``, ``csv``, ``xlsx``, ``json``, ``aresource``, ``strings``
-    :query string q: Filter downloaded strings, see :ref:`search`.
+    :resheader Last-Modified: Timestamp of last change to this file.
+    :reqheader If-Modified-Since: Skips response if the file has not been modified since that time.
+
+    :query format: File format to use; if not specified no format conversion happens; see :ref:`download` for supported formats
+    :query string q: Filter downloaded strings, see :ref:`search`, only applicable when conversion is in place (``format`` is specified).
 
     :param project: Project URL slug
     :type project: string
@@ -1937,7 +2085,7 @@ Translations
     :type component: string
     :param language: Translation language code
     :type language: string
-    :form string conflicts: How to deal with conflicts (``ignore``, ``replace-translated`` or ``replace-approved``)
+    :form string conflicts: How to deal with conflicts (``ignore``, ``replace-translated`` or ``replace-approved``), see :ref:`upload-conflicts`
     :form file file: Uploaded file
     :form string email: Author e-mail
     :form string author: Author name
@@ -1955,7 +2103,7 @@ Translations
 
 .. http:get:: /api/translations/(string:project)/(string:component)/(string:language)/repository/
 
-    Returns information about VCS repository status.
+    Returns information about the VCS repository status.
 
     The response is same as for :http:get:`/api/components/(string:project)/(string:component)/repository/`.
 
@@ -1985,29 +2133,16 @@ Translations
 
     Returns detailed translation statistics.
 
-    .. versionadded:: 2.7
-
     :param project: Project URL slug
     :type project: string
     :param component: Component URL slug
     :type component: string
     :param language: Translation language code
     :type language: string
-    :>json string code: language code
-    :>json int failing: number of failing checks
-    :>json float failing_percent: percentage of failing checks
-    :>json int fuzzy: number of fuzzy (marked for edit) strings
-    :>json float fuzzy_percent: percentage of fuzzy (marked for edit) strings
-    :>json int total_words: total number of words
-    :>json int translated_words: number of translated words
-    :>json string last_author: name of last author
-    :>json timestamp last_change: date of last change
-    :>json string name: language name
-    :>json int total: total number of strings
-    :>json int translated: number of translated strings
-    :>json float translated_percent: percentage of translated strings
-    :>json string url: URL to access the translation (engagement URL)
-    :>json string url_translate: URL to access the translation (real translation URL)
+
+    .. seealso::
+
+       Returned attributes are described in :ref:`api-statistics`.
 
 
 Memory
@@ -2032,17 +2167,14 @@ Units
 
 A `unit` is a single piece of a translation which pairs a source string with a
 corresponding translated string and also contains some related metadata. The
-term is derived from the `Translate Toolkit
-<http://docs.translatehouse.org/projects/translate-toolkit/en/latest/api/storage.html#translate.storage.base.TranslationUnit>`_
+term is derived from the :py:class:`tt:translate.storage.base.TranslationUnit` in Translate Toolkit
 and XLIFF.
-
-.. versionadded:: 2.10
 
 .. http:get:: /api/units/
 
-    Returns list of translation units.
+    Returns a list of translation units.
 
-    :param q: Search query string :ref:`Searching` (optional)
+    :param q: Search query string :doc:`/user/search` (optional)
     :type q: string
 
     .. seealso::
@@ -2056,7 +2188,11 @@ and XLIFF.
        The ``target`` and ``source`` are now arrays to properly handle plural
        strings.
 
-    Returns information about translation unit.
+    .. versionchanged:: 5.6
+
+       The ``last_updated`` attribute is now exposed.
+
+    Returns information about the translation unit.
 
     :param id: Unit ID
     :type id: int
@@ -2070,7 +2206,8 @@ and XLIFF.
     :>json string context: translation unit context
     :>json string note: translation unit note
     :>json string flags: translation unit flags
-    :>json int state: unit state, 0 - untranslated, 10 - needs editing, 20 - translated, 30 - approved, 100 - read only
+    :>json array labels: translation unit labels, available on source units
+    :>json int state: unit state, 0 - untranslated, 10 - needs editing, 20 - translated, 30 - approved, 100 - read-only
     :>json boolean fuzzy: whether the unit is fuzzy or marked for review
     :>json boolean translated: whether the unit is translated
     :>json boolean approved: whether the translation is approved
@@ -2087,8 +2224,9 @@ and XLIFF.
     :>json string source_unit: Source unit link; see :http:get:`/api/units/(int:id)/`
     :>json boolean pending: whether the unit is pending for write
     :>json timestamp timestamp: string age
+    :>json timestamp last_updated: last string update
 
-.. http:patch::  /api/units/(int:id)/
+.. http:patch:: /api/units/(int:id)/
 
     .. versionadded:: 4.3
 
@@ -2100,8 +2238,9 @@ and XLIFF.
     :<json array target: target string
     :<json string explanation: String explanation, available on source units, see :ref:`additional`
     :<json string extra_flags: Additional string flags, available on source units, see :ref:`custom-checks`
+    :<json array labels: labels, available on source units
 
-.. http:put::  /api/units/(int:id)/
+.. http:put:: /api/units/(int:id)/
 
     .. versionadded:: 4.3
 
@@ -2113,8 +2252,9 @@ and XLIFF.
     :<json array target: target string
     :<json string explanation: String explanation, available on source units, see :ref:`additional`
     :<json string extra_flags: Additional string flags, available on source units, see :ref:`custom-checks`
+    :<json array labels: labels, available on source units
 
-.. http:delete::  /api/units/(int:id)/
+.. http:delete:: /api/units/(int:id)/
 
     .. versionadded:: 4.3
 
@@ -2125,8 +2265,6 @@ and XLIFF.
 
 Changes
 +++++++
-
-.. versionadded:: 2.10
 
 .. http:get:: /api/changes/
 
@@ -2147,7 +2285,7 @@ Changes
 
 .. http:get:: /api/changes/(int:id)/
 
-    Returns information about translation change.
+    Returns information about the translation change.
 
     :param id: Change ID
     :type id: int
@@ -2159,13 +2297,13 @@ Changes
     :>json timestamp timestamp: event timestamp
     :>json int action: numeric identification of action
     :>json string action_name: text description of action
-    :>json string target: event changed text or detail
+    :>json string target: event changed text
+    :>json string old: previous text
+    :>json object details: additional details about the change
     :>json int id: change identifier
 
 Screenshots
 +++++++++++
-
-.. versionadded:: 2.14
 
 .. http:get:: /api/screenshots/
 
@@ -2177,7 +2315,7 @@ Screenshots
 
 .. http:get:: /api/screenshots/(int:id)/
 
-    Returns information about screenshot information.
+    Returns information about the screenshot.
 
     :param id: Screenshot ID
     :type id: int
@@ -2390,6 +2528,17 @@ Component lists
     :param slug: Component list slug
     :type slug: string
 
+.. http:get:: /api/component-lists/(str:slug)/components/
+
+   .. versionadded:: 5.0.1
+
+    List components in a component list.
+
+    :param slug: Component list slug
+    :type slug: string
+    :form string component_id: Component ID
+    :>json array results: array of component objects; see :http:get:`/api/components/(string:project)/(string:component)/`
+
 .. http:post:: /api/component-lists/(str:slug)/components/
 
     Associate component with a component list.
@@ -2426,7 +2575,7 @@ Tasks
 
 .. http:get:: /api/tasks/(str:uuid)/
 
-    Returns information about a task
+    Returns information about a task.
 
     :param uuid: Task UUID
     :type uuid: string
@@ -2435,6 +2584,63 @@ Tasks
     :>json object result: Task result or progress details
     :>json string log: Task log
 
+.. _api-statistics:
+
+Statistics
+++++++++++
+
+
+.. http:get:: /api/(str:object)/statistics/
+
+   There are several statistics endpoints for objects and all of them contain same structure.
+
+   :param object: URL path
+   :type object: string
+   :>json int total: total number of strings
+   :>json int total_words: total number of words
+   :>json int total_chars: total number of characters
+   :>json timestamp last_change: date of last change
+   :>json int translated: number of translated strings
+   :>json float translated_percent: percentage of translated strings
+   :>json int translated_words: number of translated words
+   :>json float translated_words_percent: percentage of translated words
+   :>json int translated_chars: number of translated characters
+   :>json float translated_chars_percent: percentage of translated characters
+   :>json int fuzzy: number of fuzzy (marked for edit) strings
+   :>json int fuzzy_words: number of fuzzy (marked for edit) words
+   :>json int fuzzy_chars: number of fuzzy (marked for edit) characters
+   :>json float fuzzy_percent: percentage of fuzzy (marked for edit) strings
+   :>json float fuzzy_words_percent: percentage of fuzzy (marked for edit) words
+   :>json float fuzzy_chars_percent: percentage of fuzzy (marked for edit) characters
+   :>json int failing: number of failing checks
+   :>json float failing_percent: percentage of failing checks
+   :>json int approved: number of approved strings
+   :>json int approved_words: number of approved words
+   :>json int approved_chars: number of approved characters
+   :>json float approved_percent: percentage of approved strings
+   :>json float approved_words_percent: percentage of approved words
+   :>json float approved_chars_percent: percentage of approved characters
+   :>json int readonly: number of read-only strings
+   :>json int readonly_words: number of read-only words
+   :>json int readonly: number of read-only characters
+   :>json float readonly_percent: percentage of read-only strings
+   :>json float readonly_words_percent: percentage of read-only words
+   :>json float readonly_char_percent: percentage of read-only characters
+   :>json int suggestions: number of strings with suggestions
+   :>json int comments: number of strings with comments
+   :>json string name: object name
+   :>json string url: URL to access the object (if applicable)
+   :>json string url_translate: URL to access the translation (if applicable)
+   :>json string code: language code (if applicable)
+
+   .. seealso::
+
+      :http:get:`/api/languages/(string:language)/statistics/`,
+      :http:get:`/api/projects/(string:project)/statistics/`,
+      :http:get:`/api/categories/(int:id)/statistics/`,
+      :http:get:`/api/components/(string:project)/(string:component)/statistics/`,
+      :http:get:`/api/translations/(string:project)/(string:component)/(string:language)/statistics/`
+
 Metrics
 +++++++
 
@@ -2442,19 +2648,105 @@ Metrics
 
     Returns server metrics.
 
+    .. versionchanged:: 5.6.1
+
+       Metrics can now be exposed in OpenMetrics compatible format with ``?format=openmetrics``.
+
     :>json int units: Number of units
     :>json int units_translated: Number of translated units
     :>json int users: Number of users
     :>json int changes: Number of changes
     :>json int projects: Number of projects
-    :>json int components:  Number of components
-    :>json int translations:  Number of translations
-    :>json int languages:  Number of used languages
-    :>json int checks:  Number of triggered quality checks
-    :>json int configuration_errors:  Number of configuration errors
-    :>json int suggestions:  Number of pending suggestions
+    :>json int components: Number of components
+    :>json int translations: Number of translations
+    :>json int languages: Number of used languages
+    :>json int checks: Number of triggered quality checks
+    :>json int configuration_errors: Number of configuration errors
+    :>json int suggestions: Number of pending suggestions
     :>json object celery_queues: Lengths of Celery queues, see :ref:`celery`
     :>json string name: Configured server name
+
+Search
++++++++
+
+.. http:get:: /api/search/
+
+   .. versionadded:: 4.18
+
+   Returns site-wide search results as a list. There is no pagination on the
+   result set, only first few matches are returned for each category.
+
+   :>json str name: Name of the matched item.
+   :>json str url: Web URL of the matched item.
+   :>json str category: Category of the matched item.
+
+Categories
+++++++++++
+
+.. http:get:: /api/categories/
+
+   .. versionadded:: 5.0
+
+   Lists available categories. See :http:get:`/api/categories/(int:id)/` for field definitions.
+
+.. http:post:: /api/categories/
+
+   .. versionadded:: 5.0
+
+   Creates a new category. See :http:get:`/api/categories/(int:id)/` for field definitions.
+
+.. http:get:: /api/categories/(int:id)/
+
+   .. versionadded:: 5.0
+
+   :param id: Category ID
+   :type id: int
+   :>json str name: Name of category.
+   :>json str slug: Slug of category.
+   :>json str project: Link to a project.
+   :>json str category: Link to a parent category.
+
+.. http:patch:: /api/categories/(int:id)/
+
+   .. versionadded:: 5.0
+
+    Edit partial information about category.
+
+    :param id: Category ID
+    :type id: int
+    :>json object configuration: Optional category configuration
+
+.. http:put:: /api/categories/(int:id)/
+
+   .. versionadded:: 5.0
+
+    Edit full information about category.
+
+    :param id: Category ID
+    :type id: int
+    :>json object configuration: Optional category configuration
+
+.. http:delete:: /api/categories/(int:id)/
+
+   .. versionadded:: 5.0
+
+    Delete category.
+
+    :param id: Category ID
+    :type id: int
+
+.. http:get:: /api/categories/(int:id)/statistics/
+
+    .. versionadded:: 5.5
+
+    Returns statistics for a category.
+
+    :param project: Category ID
+    :type project: int
+
+    .. seealso::
+
+       Returned attributes are described in :ref:`api-statistics`.
 
 .. _hooks:
 
@@ -2538,8 +2830,6 @@ update individual repositories; see
 
 .. http:post:: /hooks/pagure/
 
-    .. versionadded:: 3.3
-
     Special hook for handling Pagure notifications and automatically
     updating matching components.
 
@@ -2554,28 +2844,24 @@ update individual repositories; see
 
 .. http:post:: /hooks/azure/
 
-    .. versionadded:: 3.8
-
     Special hook for handling Azure DevOps notifications and automatically
     updating matching components.
 
     .. note::
 
-       Please make sure that :guilabel:`Resource details to send` is set to
+       Please ensure that :guilabel:`Resource details to send` is set to
        *All*, otherwise Weblate will not be able to match your Azure repository.
 
     .. seealso::
 
         :ref:`azure-setup`
             For instruction on setting up Azure integration
-        https://docs.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks?view=azure-devops
+        https://learn.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks?view=azure-devops
             Generic information about Azure DevOps Web Hooks
         :setting:`ENABLE_HOOKS`
             For enabling hooks for whole Weblate
 
 .. http:post:: /hooks/gitea/
-
-    .. versionadded:: 3.9
 
     Special hook for handling Gitea Webhook notifications and automatically
     updating matching components.
@@ -2591,8 +2877,6 @@ update individual repositories; see
 
 .. http:post:: /hooks/gitee/
 
-    .. versionadded:: 3.9
-
     Special hook for handling Gitee Webhook notifications and automatically
     updating matching components.
 
@@ -2604,95 +2888,6 @@ update individual repositories; see
             Generic information about Gitee Webhooks
         :setting:`ENABLE_HOOKS`
             For enabling hooks for whole Weblate
-
-.. _exports:
-
-Exports
-+++++++
-
-Weblate provides various exports to allow you to further process the data.
-
-.. http:get:: /exports/stats/(string:project)/(string:component)/
-
-    :query string format: Output format: either ``json`` or ``csv``
-
-    .. deprecated:: 2.6
-
-        Please use :http:get:`/api/components/(string:project)/(string:component)/statistics/`
-        and :http:get:`/api/translations/(string:project)/(string:component)/(string:language)/statistics/`
-        instead; it allows access to ACL controlled projects as well.
-
-    Retrieves statistics for given component in given format.
-
-    **Example request:**
-
-    .. sourcecode:: http
-
-        GET /exports/stats/weblate/main/ HTTP/1.1
-        Host: example.com
-        Accept: application/json, text/javascript
-
-    **Example response:**
-
-    .. sourcecode:: http
-
-        HTTP/1.1 200 OK
-        Vary: Accept
-        Content-Type: application/json
-
-        [
-            {
-                "code": "cs",
-                "failing": 0,
-                "failing_percent": 0.0,
-                "fuzzy": 0,
-                "fuzzy_percent": 0.0,
-                "last_author": "Michal Čihař",
-                "last_change": "2012-03-28T15:07:38+00:00",
-                "name": "Czech",
-                "total": 436,
-                "total_words": 15271,
-                "translated": 436,
-                "translated_percent": 100.0,
-                "translated_words": 3201,
-                "url": "http://hosted.weblate.org/engage/weblate/cs/",
-                "url_translate": "http://hosted.weblate.org/projects/weblate/main/cs/"
-            },
-            {
-                "code": "nl",
-                "failing": 21,
-                "failing_percent": 4.8,
-                "fuzzy": 11,
-                "fuzzy_percent": 2.5,
-                "last_author": null,
-                "last_change": null,
-                "name": "Dutch",
-                "total": 436,
-                "total_words": 15271,
-                "translated": 319,
-                "translated_percent": 73.2,
-                "translated_words": 3201,
-                "url": "http://hosted.weblate.org/engage/weblate/nl/",
-                "url_translate": "http://hosted.weblate.org/projects/weblate/main/nl/"
-            },
-            {
-                "code": "el",
-                "failing": 11,
-                "failing_percent": 2.5,
-                "fuzzy": 21,
-                "fuzzy_percent": 4.8,
-                "last_author": null,
-                "last_change": null,
-                "name": "Greek",
-                "total": 436,
-                "total_words": 15271,
-                "translated": 312,
-                "translated_percent": 71.6,
-                "translated_words": 3201,
-                "url": "http://hosted.weblate.org/engage/weblate/el/",
-                "url_translate": "http://hosted.weblate.org/projects/weblate/main/el/"
-            }
-        ]
 
 .. _rss:
 

@@ -1,74 +1,42 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from django.conf import settings
-
-from .base import MachineTranslation
+from .base import DownloadTranslations, ResponseStatusMachineTranslation
 from .forms import MyMemoryMachineryForm
 
 
-class MyMemoryTranslation(MachineTranslation):
+class MyMemoryTranslation(ResponseStatusMachineTranslation):
     """MyMemory machine translation support."""
 
     name = "MyMemory"
     do_cleanup = False
     settings_form = MyMemoryMachineryForm
 
-    @staticmethod
-    def migrate_settings():
-        return {
-            "email": settings.MT_MYMEMORY_EMAIL,
-            "username": settings.MT_MYMEMORY_USER,
-            "key": settings.MT_MYMEMORY_KEY,
-        }
-
     def map_language_code(self, code):
         """Convert language to service specific code."""
         return super().map_language_code(code).replace("_", "-")
 
-    def is_supported(self, source, language):
+    def is_supported(self, source_language, target_language):
         """Check whether given language combination is supported."""
         return (
-            self.lang_supported(source)
-            and self.lang_supported(language)
-            and source != language
+            self.lang_supported(source_language)
+            and self.lang_supported(target_language)
+            and source_language != target_language
         )
 
     @staticmethod
     def lang_supported(language):
         """Almost any language without modifiers is supported."""
-        if language in ("ia", "tt", "ug"):
+        if language in {"ia", "tt", "ug"}:
             return False
         return "@" not in language
 
     def format_match(self, match):
         """Reformat match to (translation, quality) tuple."""
-        if isinstance(match["quality"], int):
-            quality = match["quality"]
-        elif match["quality"] is not None and match["quality"].isdigit():
-            quality = int(match["quality"])
-        else:
-            quality = 0
-
         result = {
             "text": match["translation"],
-            "quality": int(quality * match["match"]),
+            "quality": int(100 * match["match"]),
             "service": self.name,
             "source": match["segment"],
         }
@@ -83,18 +51,17 @@ class MyMemoryTranslation(MachineTranslation):
 
     def download_translations(
         self,
-        source,
-        language,
+        source_language,
+        target_language,
         text: str,
         unit,
         user,
-        search: bool,
         threshold: int = 75,
-    ):
+    ) -> DownloadTranslations:
         """Download list of possible translations from MyMemory."""
         args = {
             "q": text.split(". ")[0][:500],
-            "langpair": f"{source}|{language}",
+            "langpair": f"{source_language}|{target_language}",
         }
         if self.settings["email"]:
             args["de"] = self.settings["email"]
@@ -103,8 +70,10 @@ class MyMemoryTranslation(MachineTranslation):
         if self.settings["key"]:
             args["key"] = self.settings["key"]
 
-        response = self.request_status(
+        response = self.request(
             "get", "https://mymemory.translated.net/api/get", params=args
-        )
+        ).json()
         for match in response["matches"]:
-            yield self.format_match(match)
+            result = self.format_match(match)
+            if result["quality"] > threshold:
+                yield result

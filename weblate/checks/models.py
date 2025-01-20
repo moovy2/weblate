@@ -1,23 +1,11 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 from appconf import AppConf
 from django.db import models
@@ -26,8 +14,17 @@ from django.utils.functional import cached_property
 
 from weblate.utils.classloader import ClassLoader
 
+from .base import BaseCheck
+
+if TYPE_CHECKING:
+    from weblate.auth.models import User
+    from weblate.trans.models import Unit
+
 
 class ChecksLoader(ClassLoader):
+    def __init__(self) -> None:
+        super().__init__("CHECK_LIST", base_class=BaseCheck)
+
     @cached_property
     def source(self):
         return {k: v for k, v in self.items() if v.source}
@@ -36,9 +33,13 @@ class ChecksLoader(ClassLoader):
     def target(self):
         return {k: v for k, v in self.items() if v.target}
 
+    @cached_property
+    def glossary(self):
+        return {k: v for k, v in self.items() if v.glossary}
+
 
 # Initialize checks list
-CHECKS = ChecksLoader("CHECK_LIST")
+CHECKS = ChecksLoader()
 
 
 class WeblateChecksConf(AppConf):
@@ -54,6 +55,7 @@ class WeblateChecksConf(AppConf):
         "weblate.checks.chars.EndColonCheck",
         "weblate.checks.chars.EndQuestionCheck",
         "weblate.checks.chars.EndExclamationCheck",
+        "weblate.checks.chars.EndInterrobangCheck",
         "weblate.checks.chars.EndEllipsisCheck",
         "weblate.checks.chars.EndSemicolonCheck",
         "weblate.checks.chars.MaxLengthCheck",
@@ -64,6 +66,7 @@ class WeblateChecksConf(AppConf):
         "weblate.checks.format.PHPFormatCheck",
         "weblate.checks.format.CFormatCheck",
         "weblate.checks.format.PerlFormatCheck",
+        "weblate.checks.format.PerlBraceFormatCheck",
         "weblate.checks.format.JavaScriptFormatCheck",
         "weblate.checks.format.LuaFormatCheck",
         "weblate.checks.format.ObjectPascalFormatCheck",
@@ -84,6 +87,7 @@ class WeblateChecksConf(AppConf):
         "weblate.checks.consistency.PluralsCheck",
         "weblate.checks.consistency.SamePluralsCheck",
         "weblate.checks.consistency.ConsistencyCheck",
+        "weblate.checks.consistency.ReusedCheck",
         "weblate.checks.consistency.TranslatedCheck",
         "weblate.checks.chars.EscapedNewlineCountingCheck",
         "weblate.checks.chars.NewLineCountCheck",
@@ -97,6 +101,8 @@ class WeblateChecksConf(AppConf):
         "weblate.checks.markup.MarkdownSyntaxCheck",
         "weblate.checks.markup.URLCheck",
         "weblate.checks.markup.SafeHTMLCheck",
+        "weblate.checks.markup.RSTReferencesCheck",
+        "weblate.checks.markup.RSTSyntaxCheck",
         "weblate.checks.placeholders.PlaceholderCheck",
         "weblate.checks.placeholders.RegexCheck",
         "weblate.checks.duplicate.DuplicateCheck",
@@ -106,6 +112,13 @@ class WeblateChecksConf(AppConf):
         "weblate.checks.source.LongUntranslatedCheck",
         "weblate.checks.format.MultipleUnnamedFormatsCheck",
         "weblate.checks.glossary.GlossaryCheck",
+        "weblate.checks.glossary.ProhibitedInitialCharacterCheck",
+        "weblate.checks.fluent.syntax.FluentSourceSyntaxCheck",
+        "weblate.checks.fluent.syntax.FluentTargetSyntaxCheck",
+        "weblate.checks.fluent.parts.FluentPartsCheck",
+        "weblate.checks.fluent.references.FluentReferencesCheck",
+        "weblate.checks.fluent.inner_html.FluentSourceInnerHTMLCheck",
+        "weblate.checks.fluent.inner_html.FluentTargetInnerHTMLCheck",
     )
 
     class Meta:
@@ -113,20 +126,24 @@ class WeblateChecksConf(AppConf):
 
 
 class CheckQuerySet(models.QuerySet):
-    def filter_access(self, user):
-        if user.is_superuser:
-            return self
-        return self.filter(
-            Q(unit__translation__component__project_id__in=user.allowed_project_ids)
-            & (
+    def filter_access(self, user: User):
+        result = self
+        if user.needs_project_filter:
+            result = result.filter(
+                unit__translation__component__project__in=user.allowed_projects
+            )
+        if user.needs_component_restrictions_filter:
+            result = result.filter(
                 Q(unit__translation__component__restricted=False)
                 | Q(unit__translation__component_id__in=user.component_permissions)
             )
-        )
+        return result
 
 
 class Check(models.Model):
-    unit = models.ForeignKey("trans.Unit", on_delete=models.deletion.CASCADE)
+    unit = models.ForeignKey(
+        "trans.Unit", on_delete=models.deletion.CASCADE, db_index=False
+    )
     name = models.CharField(max_length=50, choices=CHECKS.get_choices())
     dismissed = models.BooleanField(db_index=True, default=False)
 
@@ -137,11 +154,11 @@ class Check(models.Model):
         verbose_name = "Quality check"
         verbose_name_plural = "Quality checks"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return str(self.get_name())
 
     @cached_property
-    def check_obj(self):
+    def check_obj(self) -> BaseCheck | None:
         try:
             return CHECKS[self.name]
         except KeyError:
@@ -176,14 +193,18 @@ class Check(models.Model):
             return self.check_obj.get_doc_url(user=user)
         return ""
 
-    def set_dismiss(self, state=True):
+    def set_dismiss(self, state=True) -> None:
         """Set ignore flag."""
         self.dismissed = state
         self.save(update_fields=["dismissed"])
         self.unit.translation.invalidate_cache()
 
 
-def get_display_checks(unit):
+def get_display_checks(unit: Unit):
+    check_objects = {check.name: check for check in unit.all_checks}
     for check, check_obj in CHECKS.target.items():
         if check_obj.should_display(unit):
-            yield Check(unit=unit, dismissed=False, name=check)
+            try:
+                yield check_objects[check]
+            except KeyError:
+                yield Check(unit=unit, dismissed=False, name=check)

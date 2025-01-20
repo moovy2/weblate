@@ -1,26 +1,19 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+# mypy: disable-error-code="var-annotated"
+from __future__ import annotations
 
 import os
 import platform
 from logging.handlers import SysLogHandler
+
+from weblate.api.spectacular import (
+    get_drf_settings,
+    get_drf_standardized_errors_sertings,
+    get_spectacular_settings,
+)
 
 # Title of site to use
 SITE_TITLE = "Weblate"
@@ -31,13 +24,16 @@ SITE_DOMAIN = ""
 # Whether site uses https
 ENABLE_HTTPS = False
 
+# Site URL
+SITE_URL = "{}://{}".format("https" if ENABLE_HTTPS else "http", SITE_DOMAIN)
+
 #
 # Django settings for Weblate project.
 #
 
 DEBUG = True
 
-ADMINS = (
+ADMINS: tuple[tuple[str, str], ...] = (
     # ("Your Name", "your_email@example.com"),
 )
 
@@ -73,7 +69,8 @@ DATABASES = {
             # "connect_timeout": 28800,
         },
         # Persistent connections
-        "CONN_MAX_AGE": 0,
+        "CONN_MAX_AGE": None,
+        "CONN_HEALTH_CHECKS": True,
         # Disable server-side cursors, might be needed with pgbouncer
         "DISABLE_SERVER_SIDE_CURSORS": False,
     }
@@ -82,6 +79,7 @@ DATABASES = {
 # Data directory, you can use following for the development purposes:
 # os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 DATA_DIR = "/home/weblate/data"
+CACHE_DIR = f"{DATA_DIR}/cache"
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -97,11 +95,12 @@ LANGUAGES = (
     ("ar", "العربية"),
     ("az", "Azərbaycan"),
     ("be", "Беларуская"),
-    ("be@latin", "Biełaruskaja"),
+    ("be-latn", "Biełaruskaja"),
     ("bg", "Български"),
     ("br", "Brezhoneg"),
     ("ca", "Català"),
     ("cs", "Čeština"),
+    ("cy", "Cymraeg"),
     ("da", "Dansk"),
     ("de", "Deutsch"),
     ("en", "English"),
@@ -110,6 +109,7 @@ LANGUAGES = (
     ("es", "Español"),
     ("fi", "Suomi"),
     ("fr", "Français"),
+    ("ga", "Gaeilge"),
     ("gl", "Galego"),
     ("he", "עברית"),
     ("hu", "Magyar"),
@@ -134,6 +134,7 @@ LANGUAGES = (
     ("sr", "Српски"),
     ("sr-latn", "Srpski"),
     ("sv", "Svenska"),
+    ("ta", "தமிழ்"),
     ("th", "ไทย"),
     ("tr", "Türkçe"),
     ("uk", "Українська"),
@@ -146,10 +147,6 @@ SITE_ID = 1
 # If you set this to False, Django will make some optimizations so as not
 # to load the internationalization machinery.
 USE_I18N = True
-
-# If you set this to False, Django will not format dates, numbers and
-# calendars according to the current locale.
-USE_L10N = True
 
 # If you set this to False, Django will not use timezone-aware datetimes.
 USE_TZ = True
@@ -170,7 +167,7 @@ MEDIA_URL = f"{URL_PREFIX}/media/"
 # Absolute path to the directory static files should be collected to.
 # Don't put anything in this directory yourself; store your static files
 # in apps' "static/" subdirectories and in STATICFILES_DIRS.
-STATIC_ROOT = os.path.join(DATA_DIR, "static")
+STATIC_ROOT = os.path.join(CACHE_DIR, "static")
 
 # URL prefix for static files.
 STATIC_URL = f"{URL_PREFIX}/static/"
@@ -215,19 +212,30 @@ TEMPLATES = [
 
 # GitHub username and token for sending pull requests.
 # Please see the documentation for more details.
-GITHUB_USERNAME = None
-GITHUB_TOKEN = None
+GITHUB_CREDENTIALS = {}
+
+# Azure DevOps username and token for sending pull requests.
+# Please see the documentation for more details.
+AZURE_DEVOPS_CREDENTIALS = {}
 
 # GitLab username and token for sending merge requests.
 # Please see the documentation for more details.
-GITLAB_USERNAME = None
-GITLAB_TOKEN = None
+GITLAB_CREDENTIALS = {}
+
+# Bitbucket username and token for sending merge requests.
+# Please see the documentation for more details.
+BITBUCKETSERVER_CREDENTIALS = {}
+
+# Bitbucket username, app-password and workspace for sending merge requests.
+# Please see the documentation for more details.
+BITBUCKETCLOUD_CREDENTIALS = {}
 
 # Authentication configuration
-AUTHENTICATION_BACKENDS = (
+AUTHENTICATION_BACKENDS: tuple[str, ...] = (
     "social_core.backends.email.EmailAuth",
     # "social_core.backends.google.GoogleOAuth2",
     # "social_core.backends.github.GithubOAuth2",
+    # "social_core.backends.github_enterprise.GithubEnterpriseOAuth2",
     # "social_core.backends.bitbucket.BitbucketOAuth2",
     # "social_core.backends.suse.OpenSUSEOpenId",
     # "social_core.backends.ubuntu.UbuntuOpenId",
@@ -238,6 +246,13 @@ AUTHENTICATION_BACKENDS = (
 
 # Custom user model
 AUTH_USER_MODEL = "weblate_auth.User"
+
+# WebAuthn
+OTP_WEBAUTHN_RP_NAME = SITE_TITLE
+OTP_WEBAUTHN_RP_ID = SITE_DOMAIN.split(":")[0]
+OTP_WEBAUTHN_ALLOWED_ORIGINS = [SITE_URL]
+OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN = False
+OTP_WEBAUTHN_HELPER_CLASS = "weblate.accounts.utils.WeblateWebAuthnHelper"
 
 # Social auth backends setup
 SOCIAL_AUTH_GITHUB_KEY = ""
@@ -251,6 +266,12 @@ SOCIAL_AUTH_GITHUB_ORG_NAME = ""
 SOCIAL_AUTH_GITHUB_TEAM_KEY = ""
 SOCIAL_AUTH_GITHUB_TEAM_SECRET = ""
 SOCIAL_AUTH_GITHUB_TEAM_ID = ""
+
+SOCIAL_AUTH_GITHUB_ENTERPRISE_KEY = ""
+SOCIAL_AUTH_GITHUB_ENTERPRISE_SECRET = ""
+SOCIAL_AUTH_GITHUB_ENTERPRISE_URL = ""
+SOCIAL_AUTH_GITHUB_ENTERPRISE_API_URL = ""
+SOCIAL_AUTH_GITHUB_ENTERPRISE_SCOPE = ""
 
 SOCIAL_AUTH_BITBUCKET_OAUTH2_KEY = ""
 SOCIAL_AUTH_BITBUCKET_OAUTH2_SECRET = ""
@@ -284,10 +305,12 @@ SOCIAL_AUTH_PIPELINE = (
     "social_core.pipeline.user.create_user",
     "social_core.pipeline.social_auth.associate_user",
     "social_core.pipeline.social_auth.load_extra_data",
+    "weblate.accounts.pipeline.second_factor",
     "weblate.accounts.pipeline.cleanup_next",
     "weblate.accounts.pipeline.user_full_name",
     "weblate.accounts.pipeline.store_email",
     "weblate.accounts.pipeline.notify_connect",
+    "weblate.accounts.pipeline.handle_invite",
     "weblate.accounts.pipeline.password_reset",
 )
 SOCIAL_AUTH_DISCONNECT_PIPELINE = (
@@ -319,7 +342,7 @@ SOCIAL_AUTH_SLUGIFY_FUNCTION = "weblate.accounts.pipeline.slugify_username"
 # Password validation configuration
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"  # noqa: E501, pylint: disable=line-too-long
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
     {
         "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
@@ -357,10 +380,12 @@ REQUIRE_LOGIN = False
 MIDDLEWARE = [
     "weblate.middleware.RedirectMiddleware",
     "weblate.middleware.ProxyMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "weblate.accounts.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "social_django.middleware.SocialAuthExceptionMiddleware",
@@ -402,17 +427,26 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "django.contrib.admin.apps.SimpleAdminConfig",
-    "django.contrib.admindocs",
+    "django.contrib.admin",
     "django.contrib.sitemaps",
     "django.contrib.humanize",
     # Third party Django modules
     "social_django",
     "crispy_forms",
+    "crispy_bootstrap3",
     "compressor",
     "rest_framework",
     "rest_framework.authtoken",
     "django_filters",
+    "django_celery_beat",
+    "corsheaders",
+    "django_otp",
+    "django_otp.plugins.otp_static",
+    "django_otp.plugins.otp_totp",
+    "django_otp_webauthn",
+    "drf_spectacular",
+    "drf_spectacular_sidecar",
+    "drf_standardized_errors",
 ]
 
 # Custom exception reporter to include some details
@@ -429,28 +463,33 @@ HAVE_SYSLOG = False
 if platform.system() != "Windows":
     try:
         handler = SysLogHandler(address="/dev/log", facility=SysLogHandler.LOG_LOCAL2)
+        # Since Python 3.7 connect failures are silently discarded, so
+        # the exception is almost never raised here. Instead we look whether the socket
+        # to syslog is open after init.
+        HAVE_SYSLOG = handler.socket.fileno() != -1  # type: ignore[attr-defined]
         handler.close()
-        HAVE_SYSLOG = True
     except OSError:
         HAVE_SYSLOG = False
 
-if DEBUG or not HAVE_SYSLOG:
-    DEFAULT_LOG = "console"
-else:
-    DEFAULT_LOG = "syslog"
+DEFAULT_LOG = ["console" if DEBUG or not HAVE_SYSLOG else "syslog"]
 DEFAULT_LOGLEVEL = "DEBUG" if DEBUG else "INFO"
+
+# GELF TCP integration (Graylog)
+WEBLATE_LOG_GELF_HOST = None
+
+if WEBLATE_LOG_GELF_HOST:
+    DEFAULT_LOG.append("gelf")
 
 # A sample logging configuration. The only tangible logging
 # performed by this configuration is to send an email to
 # the site admins on every HTTP 500 error when DEBUG=False.
 # See http://docs.djangoproject.com/en/stable/topics/logging for
 # more details on how to customize your logging configuration.
-LOGGING = {
+LOGGING: dict = {
     "version": 1,
     "disable_existing_loggers": True,
     "filters": {"require_debug_false": {"()": "django.utils.log.RequireDebugFalse"}},
     "formatters": {
-        "syslog": {"format": "weblate[%(process)d]: %(levelname)s %(message)s"},
         "simple": {"format": "[%(asctime)s: %(levelname)s/%(process)s] %(message)s"},
         "logfile": {"format": "%(asctime)s %(levelname)s %(message)s"},
         "django.server": {
@@ -475,13 +514,6 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "django.server",
         },
-        "syslog": {
-            "level": "DEBUG",
-            "class": "logging.handlers.SysLogHandler",
-            "formatter": "syslog",
-            "address": "/dev/log",
-            "facility": SysLogHandler.LOG_LOCAL2,
-        },
         # Logging to a file
         # "logfile": {
         #     "level":"DEBUG",
@@ -494,7 +526,7 @@ LOGGING = {
     },
     "loggers": {
         "django.request": {
-            "handlers": ["mail_admins", DEFAULT_LOG],
+            "handlers": ["mail_admins", *DEFAULT_LOG],
             "level": "ERROR",
             "propagate": True,
         },
@@ -504,108 +536,68 @@ LOGGING = {
             "propagate": False,
         },
         # Logging database queries
-        # "django.db.backends": {
-        #     "handlers": [DEFAULT_LOG],
-        #     "level": "DEBUG",
-        # },
-        "weblate": {"handlers": [DEFAULT_LOG], "level": DEFAULT_LOGLEVEL},
+        "django.db.backends": {
+            "handlers": [*DEFAULT_LOG],
+            # Toggle to DEBUG to log all database queries
+            "level": "CRITICAL",
+        },
+        "redis_lock": {
+            "handlers": [*DEFAULT_LOG],
+            "level": DEFAULT_LOGLEVEL,
+        },
+        "weblate": {
+            "handlers": [*DEFAULT_LOG],
+            "level": DEFAULT_LOGLEVEL,
+        },
         # Logging VCS operations
-        "weblate.vcs": {"handlers": [DEFAULT_LOG], "level": DEFAULT_LOGLEVEL},
+        "weblate.vcs": {
+            "handlers": [*DEFAULT_LOG],
+            "level": DEFAULT_LOGLEVEL,
+        },
         # Python Social Auth
-        "social": {"handlers": [DEFAULT_LOG], "level": DEFAULT_LOGLEVEL},
+        "social": {
+            "handlers": [*DEFAULT_LOG],
+            "level": DEFAULT_LOGLEVEL,
+        },
         # Django Authentication Using LDAP
-        "django_auth_ldap": {"handlers": [DEFAULT_LOG], "level": DEFAULT_LOGLEVEL},
+        "django_auth_ldap": {
+            "handlers": [*DEFAULT_LOG],
+            "level": DEFAULT_LOGLEVEL,
+        },
         # SAML IdP
-        "djangosaml2idp": {"handlers": [DEFAULT_LOG], "level": DEFAULT_LOGLEVEL},
+        "djangosaml2idp": {
+            "handlers": [*DEFAULT_LOG],
+            "level": DEFAULT_LOGLEVEL,
+        },
     },
 }
 
-# Remove syslog setup if it's not present
-if not HAVE_SYSLOG:
-    del LOGGING["handlers"]["syslog"]
+# Configure syslog setup if it's present
+if HAVE_SYSLOG:
+    LOGGING["formatters"]["syslog"] = {
+        "format": "weblate[%(process)d]: %(levelname)s %(message)s",
+    }
+    LOGGING["handlers"]["syslog"] = {
+        "level": "DEBUG",
+        "class": "logging.handlers.SysLogHandler",
+        "formatter": "syslog",
+        "address": "/dev/log",
+        "facility": SysLogHandler.LOG_LOCAL2,
+    }
 
-# List of machine translations
-MT_SERVICES = (
-    #     "weblate.machinery.apertium.ApertiumAPYTranslation",
-    #     "weblate.machinery.baidu.BaiduTranslation",
-    #     "weblate.machinery.deepl.DeepLTranslation",
-    #     "weblate.machinery.glosbe.GlosbeTranslation",
-    #     "weblate.machinery.google.GoogleTranslation",
-    #     "weblate.machinery.googlev3.GoogleV3Translation",
-    #     "weblate.machinery.libretranslate.LibreTranslateTranslation",
-    #     "weblate.machinery.microsoft.MicrosoftCognitiveTranslation",
-    #     "weblate.machinery.microsoftterminology.MicrosoftTerminologyService",
-    #     "weblate.machinery.modernmt.ModernMTTranslation",
-    #     "weblate.machinery.mymemory.MyMemoryTranslation",
-    #     "weblate.machinery.netease.NeteaseSightTranslation",
-    #     "weblate.machinery.tmserver.AmagamaTranslation",
-    #     "weblate.machinery.tmserver.TMServerTranslation",
-    #     "weblate.machinery.yandex.YandexTranslation",
-    #     "weblate.machinery.saptranslationhub.SAPTranslationHub",
-    #     "weblate.machinery.youdao.YoudaoTranslation",
-    "weblate.machinery.weblatetm.WeblateTranslation",
-    "weblate.memory.machine.WeblateMemory",
-)
-
-# Machine translation API keys
-
-# URL of the Apertium APy server
-MT_APERTIUM_APY = None
-
-# DeepL API key
-MT_DEEPL_KEY = None
-
-# LibreTranslate
-MT_LIBRETRANSLATE_API_URL = None
-MT_LIBRETRANSLATE_KEY = None
-
-# Microsoft Cognitive Services Translator API, register at
-# https://portal.azure.com/
-MT_MICROSOFT_COGNITIVE_KEY = None
-MT_MICROSOFT_REGION = None
-
-# ModernMT
-MT_MODERNMT_KEY = None
-
-# MyMemory identification email, see
-# https://mymemory.translated.net/doc/spec.php
-MT_MYMEMORY_EMAIL = None
-
-# Optional MyMemory credentials to access private translation memory
-MT_MYMEMORY_USER = None
-MT_MYMEMORY_KEY = None
-
-# Google API key for Google Translate API v2
-MT_GOOGLE_KEY = None
-
-# Google Translate API3 credentials and project id
-MT_GOOGLE_CREDENTIALS = None
-MT_GOOGLE_PROJECT = None
-
-# Baidu app key and secret
-MT_BAIDU_ID = None
-MT_BAIDU_SECRET = None
-
-# Youdao Zhiyun app key and secret
-MT_YOUDAO_ID = None
-MT_YOUDAO_SECRET = None
-
-# Netease Sight (Jianwai) app key and secret
-MT_NETEASE_KEY = None
-MT_NETEASE_SECRET = None
-
-# API key for Yandex Translate API
-MT_YANDEX_KEY = None
-
-# tmserver URL
-MT_TMSERVER = None
-
-# SAP Translation Hub
-MT_SAP_BASE_URL = None
-MT_SAP_SANDBOX_APIKEY = None
-MT_SAP_USERNAME = None
-MT_SAP_PASSWORD = None
-MT_SAP_USE_MT = True
+# Configure GELF integration if presetn
+if WEBLATE_LOG_GELF_HOST:
+    LOGGING["formatters"]["gelf"] = {
+        "()": "logging_gelf.formatters.GELFFormatter",
+        "null_character": True,
+    }
+    LOGGING["handlers"]["gelf"] = {
+        "level": "DEBUG",
+        "class": "logging_gelf.handlers.GELFTCPSocketHandler",
+        "formatter": "gelf",
+        "host": WEBLATE_LOG_GELF_HOST,
+        "port": 12201,
+    }
 
 # Use HTTPS when creating redirect URLs for social authentication, see
 # documentation for more details:
@@ -625,7 +617,7 @@ SESSION_COOKIE_HTTPONLY = True
 # SSL redirect
 SECURE_SSL_REDIRECT = ENABLE_HTTPS
 SECURE_SSL_HOST = SITE_DOMAIN
-# Sent referrrer only for same origin links
+# Sent referrer only for same origin links
 SECURE_REFERRER_POLICY = "same-origin"
 # SSL redirect URL exemption list
 SECURE_REDIRECT_EXEMPT = (r"healthz/$",)  # Allowing HTTP access to health check
@@ -635,6 +627,8 @@ SESSION_COOKIE_AGE_AUTHENTICATED = 1209600
 SESSION_COOKIE_SAMESITE = "Lax"
 # Increase allowed upload size
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50000000
+# Allow more fields for case with a lot of subscriptions in profile
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
 
 # Apply session coookie settings to language cookie as ewll
 LANGUAGE_COOKIE_SECURE = SESSION_COOKIE_SECURE
@@ -664,13 +658,16 @@ LOGOUT_URL = f"{URL_PREFIX}/accounts/logout/"
 # Default location for login
 LOGIN_REDIRECT_URL = f"{URL_PREFIX}/"
 
+# Opt-in for Django 6.0 default
+FORMS_URLFIELD_ASSUME_HTTPS = True
+
 # Anonymous user name
 ANONYMOUS_USER_NAME = "anonymous"
 
 # Reverse proxy settings
 IP_PROXY_HEADER = "HTTP_X_FORWARDED_FOR"
 IP_BEHIND_REVERSE_PROXY = False
-IP_PROXY_OFFSET = 0
+IP_PROXY_OFFSET = -1
 
 # Sending HTML in mails
 EMAIL_SEND_HTML = True
@@ -690,6 +687,7 @@ LIMIT_TRANSLATION_LENGTH_BY_SOURCE_LENGTH = True
 SIMPLIFY_LANGUAGES = True
 
 # Render forms using bootstrap
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap3"
 CRISPY_TEMPLATE_PACK = "bootstrap3"
 
 # List of quality checks
@@ -704,6 +702,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.checks.chars.EndColonCheck",
 #     "weblate.checks.chars.EndQuestionCheck",
 #     "weblate.checks.chars.EndExclamationCheck",
+#     "weblate.checks.chars.EndInterrobangCheck",
 #     "weblate.checks.chars.EndEllipsisCheck",
 #     "weblate.checks.chars.EndSemicolonCheck",
 #     "weblate.checks.chars.MaxLengthCheck",
@@ -714,6 +713,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.checks.format.PHPFormatCheck",
 #     "weblate.checks.format.CFormatCheck",
 #     "weblate.checks.format.PerlFormatCheck",
+#     "weblate.checks.format.PerlBraceFormatCheck",
 #     "weblate.checks.format.JavaScriptFormatCheck",
 #     "weblate.checks.format.LuaFormatCheck",
 #     "weblate.checks.format.ObjectPascalFormatCheck",
@@ -734,6 +734,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.checks.consistency.PluralsCheck",
 #     "weblate.checks.consistency.SamePluralsCheck",
 #     "weblate.checks.consistency.ConsistencyCheck",
+#     "weblate.checks.consistency.ReusedCheck",
 #     "weblate.checks.consistency.TranslatedCheck",
 #     "weblate.checks.chars.EscapedNewlineCountingCheck",
 #     "weblate.checks.chars.NewLineCountCheck",
@@ -747,6 +748,8 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.checks.markup.MarkdownSyntaxCheck",
 #     "weblate.checks.markup.URLCheck",
 #     "weblate.checks.markup.SafeHTMLCheck",
+#     "weblate.checks.markup.RSTReferencesCheck",
+#     "weblate.checks.markup.RSTSyntaxCheck",
 #     "weblate.checks.placeholders.PlaceholderCheck",
 #     "weblate.checks.placeholders.RegexCheck",
 #     "weblate.checks.duplicate.DuplicateCheck",
@@ -756,6 +759,13 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.checks.source.LongUntranslatedCheck",
 #     "weblate.checks.format.MultipleUnnamedFormatsCheck",
 #     "weblate.checks.glossary.GlossaryCheck",
+#     "weblate.checks.glossary.ProhibitedInitialCharacterCheck",
+#     "weblate.checks.fluent.syntax.FluentSourceSyntaxCheck",
+#     "weblate.checks.fluent.syntax.FluentTargetSyntaxCheck",
+#     "weblate.checks.fluent.parts.FluentPartsCheck",
+#     "weblate.checks.fluent.references.FluentReferencesCheck",
+#     "weblate.checks.fluent.inner_html.FluentSourceInnerHTMLCheck",
+#     "weblate.checks.fluent.inner_html.FluentTargetInnerHTMLCheck",
 # )
 
 # List of automatic fixups
@@ -764,6 +774,8 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.trans.autofixes.chars.ReplaceTrailingDotsWithEllipsis",
 #     "weblate.trans.autofixes.chars.RemoveZeroSpace",
 #     "weblate.trans.autofixes.chars.RemoveControlChars",
+#     "weblate.trans.autofixes.chars.DevanagariDanda",
+#     "weblate.trans.autofixes.html.BleachHTML",
 # )
 
 # List of enabled addons
@@ -776,7 +788,7 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.addons.gettext.GettextAuthorComments",
 #     "weblate.addons.cleanup.CleanupAddon",
 #     "weblate.addons.cleanup.RemoveBlankAddon",
-#     "weblate.addons.consistency.LangaugeConsistencyAddon",
+#     "weblate.addons.consistency.LanguageConsistencyAddon",
 #     "weblate.addons.discovery.DiscoveryAddon",
 #     "weblate.addons.autotranslate.AutoTranslateAddon",
 #     "weblate.addons.flags.SourceEditAddon",
@@ -786,7 +798,9 @@ CRISPY_TEMPLATE_PACK = "bootstrap3"
 #     "weblate.addons.generate.GenerateFileAddon",
 #     "weblate.addons.generate.PseudolocaleAddon",
 #     "weblate.addons.generate.PrefillAddon",
+#     "weblate.addons.generate.FillReadOnlyAddon",
 #     "weblate.addons.json.JSONCustomizeAddon",
+#     "weblate.addons.xml.XMLCustomizeAddon",
 #     "weblate.addons.properties.PropertiesSortAddon",
 #     "weblate.addons.git.GitSquashAddon",
 #     "weblate.addons.removal.RemoveComments",
@@ -809,23 +823,23 @@ ALLOWED_HOSTS = ["*"]
 # Configuration for caching
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
+        "BACKEND": "redis_lock.django_cache.RedisCache",
         "LOCATION": "redis://127.0.0.1:6379/1",
         # If redis is running on same host as Weblate, you might
         # want to use unix sockets instead:
         # "LOCATION": "unix:///var/run/redis/redis.sock?db=1",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "PARSER_CLASS": "redis.connection.HiredisParser",
             # If you set password here, adjust CELERY_BROKER_URL as well
             "PASSWORD": None,
             "CONNECTION_POOL_KWARGS": {},
         },
         "KEY_PREFIX": "weblate",
+        "TIMEOUT": 3600,
     },
     "avatar": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": os.path.join(DATA_DIR, "avatar-cache"),
+        "LOCATION": os.path.join(CACHE_DIR, "avatar"),
         "TIMEOUT": 86400,
         "OPTIONS": {"MAX_ENTRIES": 1000},
     },
@@ -837,40 +851,21 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 MESSAGE_STORAGE = "django.contrib.messages.storage.session.SessionStorage"
 
 # REST framework settings for API
-REST_FRAMEWORK = {
-    # Use Django's standard `django.contrib.auth` permissions,
-    # or allow read-only access for unauthenticated users.
-    "DEFAULT_PERMISSION_CLASSES": [
-        # Require authentication for login required sites
-        "rest_framework.permissions.IsAuthenticated"
-        if REQUIRE_LOGIN
-        else "rest_framework.permissions.IsAuthenticatedOrReadOnly"
-    ],
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework.authentication.TokenAuthentication",
-        "weblate.api.authentication.BearerAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
-    ),
-    "DEFAULT_THROTTLE_CLASSES": (
-        "weblate.api.throttling.UserRateThrottle",
-        "weblate.api.throttling.AnonRateThrottle",
-    ),
-    "DEFAULT_THROTTLE_RATES": {"anon": "100/day", "user": "5000/hour"},
-    "DEFAULT_PAGINATION_CLASS": ("rest_framework.pagination.PageNumberPagination"),
-    "PAGE_SIZE": 20,
-    "VIEW_DESCRIPTION_FUNCTION": "weblate.api.views.get_view_description",
-    "UNAUTHENTICATED_USER": "weblate.auth.models.get_anonymous",
-}
+REST_FRAMEWORK = get_drf_settings(
+    require_login=REQUIRE_LOGIN,
+    anon_throttle="100/day",
+    user_throttle="5000/hour",
+)
+DRF_STANDARDIZED_ERRORS = get_drf_standardized_errors_sertings()
+SPECTACULAR_SETTINGS = get_spectacular_settings(INSTALLED_APPS, SITE_URL, SITE_TITLE)
 
 # Fonts CDN URL
 FONTS_CDN_URL = None
 
 # Django compressor offline mode
 COMPRESS_OFFLINE = False
-COMPRESS_OFFLINE_CONTEXT = [
-    {"fonts_cdn_url": FONTS_CDN_URL, "STATIC_URL": STATIC_URL, "LANGUAGE_BIDI": True},
-    {"fonts_cdn_url": FONTS_CDN_URL, "STATIC_URL": STATIC_URL, "LANGUAGE_BIDI": False},
-]
+COMPRESS_OFFLINE_CONTEXT = "weblate.utils.compress.offline_context"
+COMPRESS_CSS_HASHING_METHOD = "content"
 
 # Require login for all URLs
 if REQUIRE_LOGIN:
@@ -881,12 +876,13 @@ if REQUIRE_LOGIN:
 #    rf"{URL_PREFIX}/accounts/(.*)$",  # Required for login
 #    rf"{URL_PREFIX}/admin/login/(.*)$",  # Required for admin login
 #    rf"{URL_PREFIX}/static/(.*)$",  # Required for development mode
-#    rf"{URL_PREFIX}/widgets/(.*)$",  # Allowing public access to widgets
+#    rf"{URL_PREFIX}/widget/(.*)$",  # Allowing public access to widgets
 #    rf"{URL_PREFIX}/data/(.*)$",  # Allowing public access to data exports
 #    rf"{URL_PREFIX}/hooks/(.*)$",  # Allowing public access to notification hooks
 #    rf"{URL_PREFIX}/healthz/$",  # Allowing public access to health check
 #    rf"{URL_PREFIX}/api/(.*)$",  # Allowing access to API
 #    rf"{URL_PREFIX}/js/i18n/$",  # JavaScript localization
+#    rf"{URL_PREFIX}/css/custom\.css$",  # Custom CSS support
 #    rf"{URL_PREFIX}/contact/$",  # Optional for contact form
 #    rf"{URL_PREFIX}/legal/(.*)$",  # Optional for legal app
 #    rf"{URL_PREFIX}/avatar/(.*)$",  # Optional for avatars
@@ -896,7 +892,10 @@ if REQUIRE_LOGIN:
 SILENCED_SYSTEM_CHECKS = [
     # We have modified django.contrib.auth.middleware.AuthenticationMiddleware
     # as weblate.accounts.middleware.AuthenticationMiddleware
-    "admin.E408"
+    "admin.E408",
+    # Silence drf_spectacular until these are addressed
+    "drf_spectacular.W001",
+    "drf_spectacular.W002",
 ]
 
 # Celery worker configuration for testing
@@ -906,11 +905,13 @@ SILENCED_SYSTEM_CHECKS = [
 # Celery worker configuration for production
 CELERY_TASK_ALWAYS_EAGER = False
 CELERY_BROKER_URL = "redis://localhost:6379"
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
+CELERY_RESULT_BACKEND: str | None = CELERY_BROKER_URL
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_RETRY = True
 
 # Celery settings, it is not recommended to change these
 CELERY_WORKER_MAX_MEMORY_PER_CHILD = 200000
-CELERY_BEAT_SCHEDULE_FILENAME = os.path.join(DATA_DIR, "celery", "beat-schedule")
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TASK_ROUTES = {
     "weblate.trans.tasks.auto_translate*": {"queue": "translate"},
     "weblate.accounts.tasks.notify_*": {"queue": "notify"},
@@ -921,6 +922,10 @@ CELERY_TASK_ROUTES = {
     "weblate.wladmin.tasks.backup_service": {"queue": "backup"},
     "weblate.memory.tasks.*": {"queue": "memory"},
 }
+
+# CORS allowed origins
+CORS_ALLOWED_ORIGINS = []
+CORS_URLS_REGEX = rf"^{URL_PREFIX}/api/.*$"
 
 # Enable plain database backups
 DATABASE_BACKUP = "plain"

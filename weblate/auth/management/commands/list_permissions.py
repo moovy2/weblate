@@ -1,26 +1,11 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from weblate.auth.data import ACL_GROUPS, GLOBAL_PERMISSIONS, PERMISSIONS, ROLES
+from weblate.auth.data import ACL_GROUPS, GLOBAL_PERMISSIONS, GROUPS, PERMISSIONS, ROLES
 from weblate.utils.management.base import BaseCommand
 
-PERM_NAMES = {
+GROUP_NAMES = {
     "billing": "Billing (see :ref:`billing`)",
     "change": "Changes",
     "comment": "Comments",
@@ -39,18 +24,21 @@ PERM_NAMES = {
     "vcs": "VCS",
 }
 
+PERMISSION_NAMES = dict(GLOBAL_PERMISSIONS)
+PERMISSION_NAMES.update(PERMISSIONS)
+
 
 class Command(BaseCommand):
     help = "List permissions"
 
-    def handle(self, *args, **options):
+    def handle(self, *args, **options) -> None:
         """List permissions."""
         self.stdout.write("Managing per-project access control\n\n")
 
         for name in ACL_GROUPS:
-            self.stdout.write(f"{name}\n\n\n")
+            self.stdout.write(f"`{name}`\n\n\n")
 
-        self.stdout.write("\n\n")
+        self.stdout.write("\nList of privileges\n\n")
 
         last = ""
 
@@ -61,7 +49,7 @@ class Command(BaseCommand):
             base = key.split(".")[0]
             if base != last:
                 if last:
-                    table.append((PERM_NAMES[last], rows))
+                    table.append((GROUP_NAMES[last], rows))
                 last = base
                 rows = []
 
@@ -69,13 +57,25 @@ class Command(BaseCommand):
                 (
                     name,
                     ", ".join(
-                        f"`{name}`" for name, permissions in ROLES if key in permissions
+                        f":guilabel:`{name}`"
+                        for name, permissions in ROLES
+                        if key in permissions
                     ),
                 )
             )
-        table.append((PERM_NAMES[last], rows))
+        table.append((GROUP_NAMES[last], rows))
 
-        rows = [(name, "") for _key, name in GLOBAL_PERMISSIONS]
+        rows = [
+            (
+                name,
+                ", ".join(
+                    f":guilabel:`{name}`"
+                    for name, permissions in ROLES
+                    if key in permissions
+                ),
+            )
+            for key, name in GLOBAL_PERMISSIONS
+        ]
         table.append(("Site wide privileges", rows))
 
         len_1 = max(len(group) for group, _rows in table)
@@ -86,13 +86,35 @@ class Command(BaseCommand):
         blank_sep = f"+ {' ' * len_1} +-{'-' * len_2}-+-{'-' * len_3}-+"
         row = f"| {{:{len_1}}} | {{:{len_2}}} | {{:{len_3}}} |"
         self.stdout.write(sep)
-        self.stdout.write(row.format("Scope", "Permission", "Roles"))
+        self.stdout.write(row.format("Scope", "Permission", "Built-in roles"))
         self.stdout.write(sep.replace("-", "="))
         for scope, rows in table:
-            number = 0
-            for name, role in rows:
+            for number, (name, role) in enumerate(rows):
                 if number:
                     self.stdout.write(blank_sep)
                 self.stdout.write(row.format(scope if number == 0 else "", name, role))
-                number += 1
             self.stdout.write(sep)
+
+        self.stdout.write("\nList of built-in roles\n\n")
+
+        self.stdout.write(".. list-table::\n\n")
+
+        for name, permissions in ROLES:
+            self.stdout.write(f"   * - `{name}`")
+            self.stdout.write("     - ", ending="")
+            self.stdout.write(
+                "\n       ".join(
+                    f"* :guilabel:`{PERMISSION_NAMES[perm]}`"
+                    for perm in sorted(permissions)
+                )
+            )
+
+        self.stdout.write("\nList of teams\n\n")
+
+        for name, roles, _selection in GROUPS:
+            self.stdout.write(f"`{name}`\n\n\n")
+            if not roles:
+                roles_str = "none"
+            else:
+                roles_str = ", ".join(f"`{role}`" for role in roles)
+            self.stdout.write(f"    Default roles: {roles_str}\n\n")

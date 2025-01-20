@@ -1,22 +1,7 @@
+# Copyright © Christian Köberl
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2021 Christian Köberl
-# Copyright © 2022–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
 
@@ -28,7 +13,7 @@ from weblate.trans.tests.test_views import ViewTestCase
 
 
 class ProjectTokenTest(ViewTestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         self.project.access_control = Project.ACCESS_PRIVATE
         self.project.save()
@@ -41,15 +26,13 @@ class ProjectTokenTest(ViewTestCase):
             {"full_name": "Test Token", "date_expires": "2999-12-31"},
             follow=True,
         )
+        self.assertContains(response, 'data-clipboard-message="Token copied')
         html = response.content.decode("utf-8")
-        result = re.search(
-            r'data-clipboard-text="(\w+)" data-clipboard-message="Token copied',
-            html,
-        )
+        result = re.search(r'data-clipboard-value="(\w+)"', html)
         self.assertIsNotNone(result)
         return result.group(1)
 
-    def delete_token(self):
+    def delete_token(self) -> None:
         token = User.objects.filter(is_bot=True).get()
         response = self.client.post(
             reverse("delete-user", kwargs=self.kw_project),
@@ -59,26 +42,26 @@ class ProjectTokenTest(ViewTestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    def test_create_token(self):
+    def test_create_token(self) -> None:
         """Managers should be able to create new tokens."""
         token = self.create_token()
 
         self.assertIsNotNone(token)
         self.assertGreaterEqual(len(token), 10)
 
-    def test_use_token(self):
+    def test_use_token(self) -> None:
         """Create a new token, logout and use the token for API access."""
         token = self.create_token()
         self.client.logout()
 
         response = self.client.get(
             reverse("api:project-detail", kwargs={"slug": self.project.slug}),
-            **{"HTTP_AUTHORIZATION": f"Token {token}"},
+            headers={"authorization": f"Token {token}"},
         )
 
         self.assertEqual(response.data["slug"], self.project.slug)
 
-    def test_revoke_token(self):
+    def test_revoke_token(self) -> None:
         """Create a token revoke it, check that usage is not allowed."""
         token = self.create_token()
         self.delete_token()
@@ -86,12 +69,12 @@ class ProjectTokenTest(ViewTestCase):
 
         response = self.client.get(
             reverse("api:project-detail", kwargs={"slug": self.project.slug}),
-            **{"HTTP_AUTHORIZATION": f"Token {token}"},
+            headers={"authorization": f"Token {token}"},
         )
 
         self.assertEqual(response.status_code, 401)
 
-    def test_use_token_write(self):
+    def test_use_token_write(self) -> None:
         """Use the token for API write."""
         token = self.create_token()
         self.client.logout()
@@ -101,7 +84,7 @@ class ProjectTokenTest(ViewTestCase):
             reverse("api:unit-detail", kwargs={"pk": unit.pk}),
             {"state": "20", "target": ["Test translation"]},
             content_type="application/json",
-            HTTP_AUTHORIZATION=f"Token {token}",
+            headers={"authorization": f"Token {token}"},
         )
 
         self.assertEqual(response.status_code, 200)

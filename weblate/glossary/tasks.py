@@ -1,35 +1,26 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-from typing import Optional
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
+from django.db import transaction
+from django.db.models import F
+
+from weblate.auth.models import get_anonymous
 from weblate.lang.models import Language
-from weblate.trans.models import Component
+from weblate.trans.models import Component, Project, Translation
 from weblate.utils.celery import app
-from weblate.utils.lock import WeblateLockTimeout
+from weblate.utils.lock import WeblateLockTimeoutError
+from weblate.utils.stats import prefetch_stats
 
 
 @app.task(
     trail=False,
-    autoretry_for=(Component.DoesNotExist, WeblateLockTimeout),
+    autoretry_for=(Component.DoesNotExist, WeblateLockTimeoutError),
     retry_backoff=60,
 )
-def sync_glossary_languages(pk: int, component: Optional[Component] = None):
+def sync_glossary_languages(pk: int, component: Component | None = None) -> None:
     """Add missing glossary languages."""
     if component is None:
         component = Component.objects.get(pk=pk)
@@ -42,18 +33,68 @@ def sync_glossary_languages(pk: int, component: Optional[Component] = None):
     )
     if not missing:
         return
+    component.log_info("Adding glossary languages: %s", missing)
     component.commit_pending("glossary languages", None)
+    needs_create = False
     for language in missing:
-        component.add_new_language(language, None, create_translations=False)
-    component.create_translations(request=None)
+        added = component.add_new_language(language, None, create_translations=False)
+        if added is not None:
+            needs_create = True
+
+    if needs_create:
+        component.create_translations_task()
+
+
+@app.task(trail=False, autoretry_for=(Project.DoesNotExist, WeblateLockTimeoutError))
+def cleanup_stale_glossaries(project: int | Project) -> None:
+    """
+    Delete stale glossaries.
+
+    A glossary translation is considered stale when it meets the following conditions:
+    - glossary.language is not used in any other non-glossary components
+    - glossary.language is different from glossary.component.source_language
+    - It has no translation
+
+    Stale glossary is not removed if:
+    - the component only has one glossary component
+    - if is managed outside weblate (i.e repo != 'local:')
+    """
+    if isinstance(project, int):
+        project = Project.objects.get(pk=project)
+
+    languages_in_non_glossary_components: set[int] = set(
+        Translation.objects.filter(
+            component__project=project, component__is_glossary=False
+        ).values_list("language_id", flat=True)
+    )
+
+    glossary_translations = prefetch_stats(
+        Translation.objects.filter(
+            component__project=project, component__is_glossary=True
+        )
+        .prefetch()
+        .exclude(language__id__in=languages_in_non_glossary_components)
+        .exclude(language=F("component__source_language"))
+    )
+
+    component_to_check = []
+
+    for glossary in glossary_translations:
+        if glossary.can_be_deleted():
+            glossary.remove(get_anonymous())
+            if glossary.component not in component_to_check:
+                component_to_check.append(glossary.component)
+
+    for component in component_to_check:
+        transaction.on_commit(component.schedule_update_checks)
 
 
 @app.task(
     trail=False,
-    autoretry_for=(Component.DoesNotExist, WeblateLockTimeout),
+    autoretry_for=(Component.DoesNotExist, WeblateLockTimeoutError),
     retry_backoff=60,
 )
-def sync_terminology(pk: int, component: Optional[Component] = None):
+def sync_terminology(pk: int, component: Component | None = None):
     """Sync terminology and add missing glossary languages."""
     if component is None:
         component = Component.objects.get(pk=pk)

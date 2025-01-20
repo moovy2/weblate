@@ -1,22 +1,6 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 import argparse
 import json
@@ -34,7 +18,7 @@ class Command(BaseCommand):
 
     help = "imports projects based on JSON data"
 
-    def add_arguments(self, parser):
+    def add_arguments(self, parser) -> None:
         super().add_arguments(parser)
         parser.add_argument(
             "--project", default=None, required=True, help="Project where to operate"
@@ -62,13 +46,14 @@ class Command(BaseCommand):
             help="JSON file containing component definition",
         )
 
-    def handle(self, *args, **options):  # noqa: C901
+    def handle(self, *args, **options) -> None:  # noqa: C901
         """Automatic import of components."""
         # Get project
         try:
             project = Project.objects.get(slug=options["project"])
-        except Project.DoesNotExist:
-            raise CommandError("Project does not exist!")
+        except Project.DoesNotExist as error:
+            msg = "Project does not exist!"
+            raise CommandError(msg) from error
 
         # Get main component
         main_component = None
@@ -77,19 +62,21 @@ class Command(BaseCommand):
                 main_component = Component.objects.get(
                     project=project, slug=options["main_component"]
                 )
-            except Component.DoesNotExist:
-                raise CommandError("Main component does not exist!")
+            except Component.DoesNotExist as error:
+                msg = "Main component does not exist!"
+                raise CommandError(msg) from error
 
         try:
             data = json.load(options["json-file"])
-        except ValueError:
-            raise CommandError("Failed to parse JSON file!")
+        except ValueError as error:
+            msg = "Could not parse JSON file!"
+            raise CommandError(msg) from error
         finally:
             options["json-file"].close()
 
         allfields = {
             field.name
-            for field in Component._meta.get_fields()
+            for field in Component._meta.get_fields()  # noqa: SLF001
             if field.editable and not field.is_relation
         }
 
@@ -99,32 +86,20 @@ class Command(BaseCommand):
 
         for item in data:
             if "filemask" not in item or "name" not in item:
-                raise CommandError("Missing required fields in JSON!")
+                msg = "Missing required fields in JSON!"
+                raise CommandError(msg)
 
             if "slug" not in item:
                 item["slug"] = slugify(item["name"])
 
             if "repo" not in item:
                 if main_component is None:
-                    raise CommandError("No main component and no repository URL!")
+                    msg = "No main component and no repository URL!"
+                    raise CommandError(msg)
                 item["repo"] = main_component.get_repo_link_url()
 
             try:
                 component = Component.objects.get(slug=item["slug"], project=project)
-                self.stderr.write(f"Component {component} already exists")
-                if options["ignore"]:
-                    continue
-                if options["update"]:
-                    for key in item:
-                        if key not in allfields or key == "slug":
-                            continue
-                        setattr(component, key, item[key])
-                    component.save()
-                    continue
-                raise CommandError(
-                    "Component already exists, use --ignore or --update!"
-                )
-
             except Component.DoesNotExist:
                 params = {key: item[key] for key in allfields if key in item}
                 component = Component(project=project, **params)
@@ -135,10 +110,22 @@ class Command(BaseCommand):
                         self.stderr.write(
                             "Error in {}: {}".format(key, ", ".join(value))
                         )
-                    raise CommandError("Component failed validation!")
+                    msg = "Component failed validation!"
+                    raise CommandError(msg) from error
                 component.save(force_insert=True)
                 self.stdout.write(
-                    "Imported {} with {} translations".format(
-                        component, component.translation_set.count()
-                    )
+                    f"Imported {component} with {component.translation_set.count()} translations"
                 )
+            else:
+                self.stderr.write(f"Component {component} already exists")
+                if options["ignore"]:
+                    continue
+                if options["update"]:
+                    for key in item:
+                        if key not in allfields or key == "slug":
+                            continue
+                        setattr(component, key, item[key])
+                    component.save()
+                    continue
+                msg = "Component already exists, use --ignore or --update!"
+                raise CommandError(msg)

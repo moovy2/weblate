@@ -1,28 +1,19 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Simple mathematical captcha."""
 
-
 import ast
+import base64
+import json
 import operator
 import time
+import urllib.parse
 from random import SystemRandom
+
+from altcha import Challenge, Solution, solve_challenge
+from django.utils.html import format_html
 
 from weblate.utils.templatetags.icons import icon
 
@@ -39,13 +30,13 @@ class MathCaptcha:
     operators_display = {}
     interval = (1, 10)
 
-    def __init__(self, question=None, timestamp=None):
+    def __init__(self, question=None, timestamp=None) -> None:
         if question is None:
             self.question = self.generate_question()
         else:
             self.question = question
         if timestamp is None:
-            self.timestamp = time.monotonic()
+            self.timestamp = time.time()
         else:
             self.timestamp = timestamp
         if not self.operators_display:
@@ -79,7 +70,7 @@ class MathCaptcha:
 
     def validate(self, answer):
         """Validate answer."""
-        return self.result == answer and self.timestamp + TIMEDELTA > time.monotonic()
+        return self.result == answer and self.timestamp + TIMEDELTA > time.time()
 
     @property
     def result(self):
@@ -90,11 +81,14 @@ class MathCaptcha:
     def display(self):
         """Get unicode for display."""
         parts = self.question.split()
-        return parts[0] + " " + self.operators_display[parts[1]] + " " + parts[2]
+        return format_html(
+            "{} {} {}", parts[0], self.operators_display[parts[1]], parts[2]
+        )
 
 
 def eval_expr(expr):
-    """Evaluate arithmetic expression used in Captcha.
+    """
+    Evaluate arithmetic expression used in Captcha.
 
     >>> eval_expr('2+6')
     8
@@ -106,9 +100,9 @@ def eval_expr(expr):
 
 def eval_node(node):
     """Evaluate single AST node."""
-    if isinstance(node, ast.Num):
+    if isinstance(node, ast.Constant):
         # number
-        return node.n
+        return node.value
     if isinstance(node, ast.operator):
         # operator
         return OPERATORS[type(node)]
@@ -116,3 +110,30 @@ def eval_node(node):
         # binary operation
         return eval_node(node.op)(eval_node(node.left), eval_node(node.right))
     raise ValueError(node)
+
+
+def solve_altcha(challenge: Challenge, number: int | None = None) -> str:
+    solution: Solution = solve_challenge(
+        challenge=challenge.challenge,
+        salt=challenge.salt,
+        algorithm=challenge.algorithm,
+        max_number=challenge.maxnumber,
+        start=0,
+    )
+    # Make sure the challenge expiry is in past
+    split_salt = challenge.salt.split("?")
+    params = urllib.parse.parse_qs(split_salt[1])
+    expires = int(params["expires"][0])
+    while time.time() == expires:
+        time.sleep(0.1)
+    return base64.b64encode(
+        json.dumps(
+            {
+                "algorithm": challenge.algorithm,
+                "challenge": challenge.challenge,
+                "number": solution.number if number is None else number,
+                "salt": challenge.salt,
+                "signature": challenge.signature,
+            }
+        ).encode("utf-8")
+    ).decode("utf-8")

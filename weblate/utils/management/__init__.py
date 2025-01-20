@@ -1,21 +1,6 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 import sys
 
@@ -25,14 +10,14 @@ RESTRICTED_COMMANDS = {"squashmigrations", "makemigrations"}
 
 
 class WeblateManagementUtility(ManagementUtility):
-    def __init__(self, argv=None, developer_mode: bool = False):
+    def __init__(self, argv=None, developer_mode: bool = False) -> None:
         super().__init__(argv)
         self.developer_mode = developer_mode
 
     def fetch_command(self, subcommand):
         # Block usage of some commands
         if not self.developer_mode and subcommand in RESTRICTED_COMMANDS:
-            sys.stderr.write("Blocked command: %r\n" % subcommand)
+            sys.stderr.write(f"Blocked command: {subcommand!r}\n")
             sys.stderr.write("This command is restricted for developers only.\n")
             sys.stderr.write(
                 "In case you really want to do this, please execute "
@@ -51,6 +36,6 @@ class WeblateManagementUtility(ManagementUtility):
                 txt.replace("python manage.py migrate", "weblate migrate")
             )
 
-        command.style.NOTICE = patched_notice
+        command.style.NOTICE = patched_notice  # type: ignore[method-assign]
 
         return command

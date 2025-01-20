@@ -1,25 +1,9 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from django.conf import settings
 
-from .base import MachineTranslation, MachineTranslationError
+from .base import DownloadTranslations, MachineTranslation, MachineTranslationError
 from .forms import KeyMachineryForm
 
 
@@ -30,18 +14,14 @@ class YandexTranslation(MachineTranslation):
     max_score = 90
     settings_form = KeyMachineryForm
 
-    @staticmethod
-    def migrate_settings():
-        return {
-            "key": settings.MT_YANDEX_KEY,
-        }
-
-    def check_failure(self, response):
-        if "code" not in response or response["code"] == 200:
-            return
-        if "message" in response:
-            raise MachineTranslationError(response["message"])
-        raise MachineTranslationError("Error: {}".format(response["code"]))
+    def check_failure(self, response) -> None:
+        super().check_failure(response)
+        payload = response.json()
+        if "message" in payload:
+            raise MachineTranslationError(payload["message"])
+        if "code" in payload and payload["code"] != 200:
+            msg = "Error: {}".format(payload["code"])
+            raise MachineTranslationError(msg)
 
     def download_languages(self):
         """Download list of supported languages from a service."""
@@ -51,19 +31,17 @@ class YandexTranslation(MachineTranslation):
             params={"key": self.settings["key"], "ui": "en"},
         )
         payload = response.json()
-        self.check_failure(payload)
         return payload["langs"].keys()
 
     def download_translations(
         self,
-        source,
-        language,
+        source_language,
+        target_language,
         text: str,
         unit,
         user,
-        search: bool,
         threshold: int = 75,
-    ):
+    ) -> DownloadTranslations:
         """Download list of possible translations from a service."""
         response = self.request(
             "get",
@@ -71,13 +49,11 @@ class YandexTranslation(MachineTranslation):
             params={
                 "key": self.settings["key"],
                 "text": text,
-                "lang": f"{source}-{language}",
-                "target": language,
+                "lang": f"{source_language}-{target_language}",
+                "target": target_language,
             },
         )
         payload = response.json()
-
-        self.check_failure(payload)
 
         for translation in payload["text"]:
             yield {

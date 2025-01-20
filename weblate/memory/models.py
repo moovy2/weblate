@@ -1,35 +1,20 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
 
 import json
 import math
 import os
-from functools import reduce
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Value
+from django.db.models.functions import MD5
 from django.utils.encoding import force_str
-from django.utils.translation import gettext as _
-from django.utils.translation import pgettext
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
+from django.utils.translation import gettext, pgettext
 from translate.misc.xml_helpers import getXMLlang, getXMLspace
 from translate.storage.tmx import tmxfile
 from weblate_schemas import load_schema
@@ -40,9 +25,23 @@ from weblate.memory.utils import (
     CATEGORY_PRIVATE_OFFSET,
     CATEGORY_SHARED,
     CATEGORY_USER_OFFSET,
+    is_valid_memory_entry,
 )
-from weblate.utils.db import adjust_similarity_threshold
+from weblate.utils.db import adjust_similarity_threshold, using_postgresql
 from weblate.utils.errors import report_error
+
+if TYPE_CHECKING:
+    from weblate.auth.models import AuthenticatedHttpRequest, User
+    from weblate.trans.models import Project
+
+
+SUPPORTED_FORMATS = (
+    "json",
+    "tmx",
+    "xliff",
+    "po",
+    "csv",
+)
 
 
 class MemoryImportError(Exception):
@@ -50,7 +49,11 @@ class MemoryImportError(Exception):
 
 
 def get_node_data(unit, node):
-    """Generic implementation of LISAUnit.gettarget."""
+    """
+    Return XML unit text.
+
+    Generic implementation of LISAUnit.gettarget.
+    """
     # The language should be present as xml:lang, but in some
     # cases it's there only as lang
     return (
@@ -60,54 +63,122 @@ def get_node_data(unit, node):
 
 
 class MemoryQuerySet(models.QuerySet):
-    def filter_type(self, user=None, project=None, use_shared=False, from_file=False):
-        query = []
+    def filter_type(
+        self,
+        *,
+        user: User | None = None,
+        project: Project | None = None,
+        use_shared: bool = False,
+        from_file: bool = False,
+    ):
+        base = self
+        if "memory_db" in settings.DATABASES:
+            base = base.using("memory_db")
+        query = Q()
         if from_file:
-            query.append(Q(from_file=from_file))
+            query |= Q(from_file=from_file)
         if use_shared:
-            query.append(Q(shared=use_shared))
+            query |= Q(shared=use_shared)
         if project:
-            query.append(Q(project=project))
+            query |= Q(project=project)
         if user:
-            query.append(Q(user=user))
-        return self.filter(reduce(lambda x, y: x | y, query))
+            query |= Q(user=user)
+        return base.filter(query)
+
+    def filter(self, *args, **kwargs):
+        if using_postgresql():
+            # Use MD5 for filtering to utilize MD5 index,
+            # MariaDB does not support that, but has partial
+            # index on text fields created manually
+            for field in ("source", "target", "origin"):
+                if field in kwargs:
+                    kwargs[f"{field}__md5"] = MD5(Value(kwargs.pop(field)))
+                in_field = f"{field}__in"
+                if in_field in kwargs:
+                    kwargs[f"{field}__md5__in"] = [
+                        MD5(Value(value)) for value in kwargs.pop(in_field)
+                    ]
+        return super().filter(*args, **kwargs)
+
+    def threshold_to_similarity(self, text: str, threshold: int) -> float:
+        """
+        Convert machinery threshold into PostgreSQL similarity threshold.
+
+        Machinery threshold typical values:
+
+        - 75 machinery
+        - 80 automatic translation (default value)
+        - 10 search
+
+        PostgreSQL similarity threshold needs to be higher to avoid too slow
+        queries.
+        """
+        length = len(text)
+
+        base = 0.172489 * math.log(threshold) + 0.207051
+        bonus = 7.03436 * math.exp(-6.07957 * base)
+        length_bonus = (0.0733418 * math.log(length) + 0.324497) * bonus
+
+        return max(0.6, min(1.0, round(base + length_bonus, 3)))
 
     def lookup(
-        self, source_language, target_language, text: str, user, project, use_shared
+        self,
+        source_language,
+        target_language,
+        text: str,
+        user,
+        project,
+        use_shared,
+        threshold: int = 75,
     ):
-        # Basic similarity for short strings
-        length = len(text)
-        threshold = 0.5
         # Adjust similarity based on string length to get more relevant matches
         # for long strings
-        if length > 50:
-            threshold = 1 - 28.1838 * math.log(0.0443791 * length) / length
-        adjust_similarity_threshold(threshold)
+        adjust_similarity_threshold(self.threshold_to_similarity(text, threshold))
+
         # Actual database query
-        return self.filter_type(
-            # Type filtering
-            user=user,
-            project=project,
-            use_shared=use_shared,
-            from_file=True,
-        ).filter(
-            # Full-text search on source
-            source__search=text,
-            # Language filtering
-            source_language=source_language,
-            target_language=target_language,
-        )[
-            :50
-        ]
+        return (
+            self.prefetch_project()
+            .filter_type(
+                # Type filtering
+                user=user,
+                project=project,
+                use_shared=use_shared,
+                from_file=True,
+            )
+            .filter(
+                # Full-text search on source
+                source__search=text,
+                # Language filtering
+                source_language=source_language,
+                target_language=target_language,
+            )[:50]
+        )
 
     def prefetch_lang(self):
         return self.prefetch_related("source_language", "target_language")
 
+    def prefetch_project(self):
+        return self.select_related("project")
+
 
 class MemoryManager(models.Manager):
-    def import_file(self, request, fileobj, langmap=None, **kwargs):
+    def import_file(
+        self,
+        request: AuthenticatedHttpRequest,
+        fileobj,
+        langmap=None,
+        source_language: Language | str | None = None,
+        target_language: Language | str | None = None,
+        **kwargs,
+    ):
         origin = os.path.basename(fileobj.name).lower()
         name, extension = os.path.splitext(origin)
+
+        if extension.lower().strip(".") not in SUPPORTED_FORMATS:
+            raise MemoryImportError(
+                gettext("Unsupported file extension: %s") % extension
+            )
+
         if len(name) > 25:
             origin = f"{name[:25]}...{extension}"
 
@@ -116,23 +187,43 @@ class MemoryManager(models.Manager):
         elif extension == ".json":
             result = self.import_json(request, fileobj, origin, **kwargs)
         else:
-            raise MemoryImportError(_("Unsupported file!"))
+            result = self.import_other_format(
+                request,
+                fileobj,
+                origin,
+                source_language,
+                target_language,
+                **kwargs,
+            )
+
         if not result:
-            raise MemoryImportError(_("No valid entries found in the uploaded file!"))
+            raise MemoryImportError(
+                gettext("No valid entries found in the uploaded file!")
+            )
         return result
 
-    def import_json(self, request, fileobj, origin=None, **kwargs):
+    def import_json(
+        self, request: AuthenticatedHttpRequest, fileobj, origin=None, **kwargs
+    ) -> int:
+        # Lazily import as this is expensive
+        from jsonschema import validate
+        from jsonschema.exceptions import ValidationError
+
         content = fileobj.read()
         try:
             data = json.loads(force_str(content))
         except ValueError as error:
-            report_error(cause="Failed to parse memory")
-            raise MemoryImportError(_("Failed to parse JSON file: {!s}").format(error))
+            report_error("Could not parse memory")
+            raise MemoryImportError(
+                gettext("Could not parse JSON file: %s") % error
+            ) from error
         try:
             validate(data, load_schema("weblate-memory.schema.json"))
         except ValidationError as error:
-            report_error(cause="Failed to validate memory")
-            raise MemoryImportError(_("Failed to parse JSON file: {!s}").format(error))
+            report_error("Could not validate memory")
+            raise MemoryImportError(
+                gettext("Could not parse JSON file: %s") % error
+            ) from error
         found = 0
         lang_cache = {}
         for entry in data:
@@ -154,26 +245,38 @@ class MemoryManager(models.Manager):
                 continue
         return found
 
-    def import_tmx(self, request, fileobj, origin=None, langmap=None, **kwargs):
+    def import_tmx(
+        self,
+        request: AuthenticatedHttpRequest,
+        fileobj,
+        origin=None,
+        langmap=None,
+        **kwargs,
+    ) -> int:
         if not kwargs:
             kwargs = {"from_file": True}
         try:
             storage = tmxfile.parsefile(fileobj)
-        except (SyntaxError, AssertionError):
-            report_error(cause="Failed to parse")
-            raise MemoryImportError(_("Failed to parse TMX file!"))
+        except (SyntaxError, AssertionError) as error:
+            report_error("Could not parse")
+            raise MemoryImportError(
+                gettext("Could not parse TMX file: %s") % error
+            ) from error
         header = next(
             storage.document.getroot().iterchildren(storage.namespaced("header"))
         )
         lang_cache = {}
-        try:
-            source_language = Language.objects.get_by_code(
-                header.get("srclang"), lang_cache, langmap
-            )
-        except Language.DoesNotExist:
+        srclang = header.get("srclang")
+        if not srclang:
             raise MemoryImportError(
-                _("Failed to find language %s!") % header.get("srclang")
+                gettext("Source language not defined in the TMX file!")
             )
+        try:
+            source_language = Language.objects.get_by_code(srclang, lang_cache, langmap)
+        except Language.DoesNotExist as error:
+            raise MemoryImportError(
+                gettext("Could not find language %s!") % srclang
+            ) from error
 
         found = 0
         for unit in storage.units:
@@ -188,10 +291,10 @@ class MemoryManager(models.Manager):
                     language = Language.objects.get_by_code(
                         lang_code, lang_cache, langmap
                     )
-                except Language.DoesNotExist:
+                except Language.DoesNotExist as error:
                     raise MemoryImportError(
-                        _("Failed to find language %s!") % header.get("srclang")
-                    )
+                        gettext("Could not find language %s!") % header.get("srclang")
+                    ) from error
                 translations[language.code] = text
 
             try:
@@ -214,7 +317,72 @@ class MemoryManager(models.Manager):
                 found += 1
         return found
 
-    def update_entry(self, **kwargs):
+    def import_other_format(
+        self,
+        request,
+        fileobj,
+        origin,
+        source_language: Language | str | None = None,
+        target_language: Language | str | None = None,
+        **kwargs,
+    ) -> int:
+        """
+        Import memory from other formats.
+
+        This is a generic function to import memories from other formats.
+        It currently supports all formats supported by `try_load` from
+        `weblate.formats.auto`.
+
+        """
+        from weblate.formats.auto import try_load
+
+        langcache = {}
+        try:
+            storage = try_load(origin, fileobj.read(), None, None)
+        except Exception as error:
+            report_error("Could not parse memory")
+            raise MemoryImportError(gettext("Unsupported file!")) from error
+
+        if storage.monolingual is True:
+            raise MemoryImportError(
+                gettext("Monolingual format not supported for memory upload")
+            )
+
+        def get_language(language: Language | str | None) -> Language:
+            """Get a language object based on the given code."""
+            if isinstance(language, Language):
+                return language
+
+            if not language:
+                raise MemoryImportError(
+                    gettext("Missing source or target language in file!")
+                )
+            try:
+                return Language.objects.get_by_code(language, langcache)
+            except Language.DoesNotExist as error:
+                raise MemoryImportError(
+                    gettext("Could not find language %s!") % language
+                ) from error
+
+        source_language = get_language(storage.source_language or source_language)
+        target_language = get_language(storage.language_code or target_language)
+
+        count = 0
+        for _unused, unit in storage.iterate_merge("", only_translated=True):
+            self.update_entry(
+                source_language=source_language,
+                target_language=target_language,
+                source=unit.source,
+                target=unit.target,
+                origin=origin,
+                **kwargs,
+            )
+            count += 1
+        return count
+
+    def update_entry(self, **kwargs) -> None:
+        if not is_valid_memory_entry(**kwargs):  # pylint: disable=missing-kwoa
+            return
         if not self.filter(**kwargs).exists():
             self.create(**kwargs)
 
@@ -255,8 +423,27 @@ class Memory(models.Model):
     class Meta:
         verbose_name = "Translation memory entry"
         verbose_name_plural = "Translation memory entries"
+        indexes = [
+            # Additional indexes are created manually in the migration for full text search
+            # Use MD5 to index text fields, applied in MemoryQuerySet.filter
+            models.Index(
+                MD5("origin"),
+                MD5("source"),
+                MD5("target"),
+                "source_language",
+                "target_language",
+                name="memory_md5_index",
+            ),
+            # Partial index for to optimize lookup for file based entries
+            # MySQL/MariaDB does not supports condition and uses full index instead.
+            models.Index(
+                "from_file",
+                condition=Q(from_file=True),
+                name="memory_from_file",
+            ),
+        ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Memory: {self.source_language}:{self.target_language}"
 
     def get_origin_display(self):

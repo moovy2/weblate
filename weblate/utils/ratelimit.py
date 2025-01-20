@@ -1,21 +1,11 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
+from contextlib import suppress
+from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
 from django.contrib.auth import logout
@@ -26,70 +16,102 @@ from django.template.loader import render_to_string
 
 from weblate.logger import LOGGER
 from weblate.utils import messages
+from weblate.utils.cache import is_redis_cache
+from weblate.utils.docs import get_doc_url
 from weblate.utils.hash import calculate_checksum
 from weblate.utils.request import get_ip_address
 
+if TYPE_CHECKING:
+    from django_redis.cache import RedisCache
 
-def get_cache_key(scope, request=None, address=None, user=None):
+    from weblate.auth.models import AuthenticatedHttpRequest, User
+
+
+def get_cache_key(
+    scope: str,
+    request: AuthenticatedHttpRequest | None = None,
+    address: str | None = None,
+    user: User | None = None,
+) -> str:
     """Generate cache key for request."""
-    if (request and request.user.is_authenticated) or user:
-        if user:
-            key = user.id
-        else:
-            key = request.user.id
+    if request is not None and request.user.is_authenticated and user is None:
+        user = request.user
+    if user is not None:
+        key = user.id
         origin = "user"
     else:
         if address is None:
             address = get_ip_address(request)
+            if not address:
+                LOGGER.error(
+                    "could not obtain remote IP address, see %s",
+                    get_doc_url("admin/install", "reverse-proxy"),
+                )
         origin = "ip"
         key = calculate_checksum(address)
     return f"ratelimit-{origin}-{scope}-{key}"
 
 
-def reset_rate_limit(scope, request=None, address=None, user=None):
-    """Resets rate limit."""
+def reset_rate_limit(
+    scope, request: AuthenticatedHttpRequest | None = None, address=None, user=None
+) -> None:
+    """Reset rate limit."""
     cache.delete(get_cache_key(scope, request, address, user))
 
 
-def get_rate_setting(scope, suffix):
+def get_rate_setting(scope: str, suffix: str):
     key = f"RATELIMIT_{scope.upper()}_{suffix}"
     if hasattr(settings, key):
         return getattr(settings, key)
     return getattr(settings, f"RATELIMIT_{suffix}")
 
 
-def revert_rate_limit(scope, request):
-    """Revert rate limit to previous state.
+def revert_rate_limit(scope, request: AuthenticatedHttpRequest) -> None:
+    """
+    Revert rate limit to previous state.
 
     This can be used when rate limiting POST, but ignoring some events.
     """
     key = get_cache_key(scope, request)
 
+    with suppress(ValueError):
+        # Try to increase bucket if it exists
+        cache.incr(key)
+
+
+def rate_limit(key: str, attempts: int, window: int) -> bool:
+    """Verify rate limiting limits."""
+    # Initialize the bucket (atomically on redis)
+    if not is_redis_cache():
+        if cache.get(key) is None:
+            cache.set(key, attempts, window)
+    else:
+        cast("RedisCache", cache).set(key, attempts, window, nx=True)
+
     try:
-        # Try to decrease cache key
+        # Count current event
         cache.decr(key)
     except ValueError:
-        pass
+        current = 0
+    else:
+        # Get remaining bucket
+        current = cache.get(key, 0)
+
+    return current < 0
 
 
-def check_rate_limit(scope, request):
+def check_rate_limit(scope: str, request: AuthenticatedHttpRequest) -> bool:
     """Check authentication rate limit."""
     if request.user.is_superuser:
         return True
 
     key = get_cache_key(scope, request)
+    window = get_rate_setting(scope, "WINDOW")
+    attempts = get_rate_setting(scope, "ATTEMPTS")
 
-    try:
-        # Try to increase cache key
-        attempts = cache.incr(key)
-    except ValueError:
-        # No such key, so set it
-        cache.set(key, 1, get_rate_setting(scope, "WINDOW"))
-        attempts = 1
-
-    if attempts > get_rate_setting(scope, "ATTEMPTS"):
+    if rate_limit(key, attempts, window):
         # Set key to longer expiry for lockout period
-        cache.set(key, attempts, get_rate_setting(scope, "LOCKOUT"))
+        cache.touch(key, get_rate_setting(scope, "LOCKOUT"))
         LOGGER.info(
             "rate-limit lockout for %s in %s scope from %s",
             key,
@@ -101,14 +123,22 @@ def check_rate_limit(scope, request):
     return True
 
 
-def session_ratelimit_post(scope):
+def session_ratelimit_post(scope: str, logout_user: bool = True):
     def session_ratelimit_post_inner(function):
         """Session based rate limiting for POST requests."""
 
-        def rate_wrap(request, *args, **kwargs):
+        def rate_wrap(request: AuthenticatedHttpRequest, *args, **kwargs):
             if request.method == "POST" and not check_rate_limit(scope, request):
                 # Rotate session token
                 rotate_token(request)
+                if not logout_user:
+                    messages.error(
+                        request,
+                        render_to_string(
+                            "ratelimit.html", {"do_logout": False, "user": request.user}
+                        ),
+                    )
+                    return redirect(request.get_full_path())
                 # Logout user
                 do_logout = request.user.is_authenticated
                 if do_logout:

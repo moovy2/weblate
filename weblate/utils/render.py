@@ -1,48 +1,29 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
+
+from collections import UserString
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.template import Context, Engine, Template, TemplateSyntaxError
 from django.urls import reverse
-from django.utils.translation import gettext as _
-from django.utils.translation import override
+from django.utils.functional import SimpleLazyObject
+from django.utils.translation import gettext, override
 
 from weblate.utils.site import get_site_url
+from weblate.utils.validators import WeblateEditorURLValidator, WeblateURLValidator
 
-# List of schemes not allowed in editor URL
-# This list is not intededed to be complete, just block
-# the possibly dangerous ones.
-FORBIDDEN_URL_SCHEMES = {
-    "javascript",
-    "data",
-    "vbscript",
-    "mailto",
-    "ftp",
-    "sms",
-    "tel",
-}
+if TYPE_CHECKING:
+    from django.core.validators import URLValidator
 
 
-class InvalidString(str):
-    def __mod__(self, other):
-        raise TemplateSyntaxError(_('Undefined variable: "%s"') % other)
+class InvalidString(UserString):
+    def __mod__(self, other: str):
+        raise TemplateSyntaxError(gettext('Undefined variable: "%s"') % other)
 
 
 class RestrictedEngine(Engine):
@@ -51,14 +32,14 @@ class RestrictedEngine(Engine):
         "weblate.utils.templatetags.safe_render",
     ]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         kwargs["autoescape"] = False
         kwargs["string_if_invalid"] = InvalidString("%s")
         super().__init__(*args, **kwargs)
 
 
-def render_template(template, **kwargs):
-    """Helper class to render string template with context."""
+def render_template(template: str, **kwargs):
+    """Render string template with Weblate context."""
     from weblate.trans.models import Component, Project, Translation
 
     translation = kwargs.get("translation")
@@ -70,7 +51,6 @@ def render_template(template, **kwargs):
         kwargs["hook_name"] = kwargs["addon_name"]
 
     if isinstance(translation, Translation):
-        translation.stats.ensure_basic()
         kwargs["language_code"] = translation.language_code
         kwargs["language_name"] = translation.language.get_name()
         kwargs["stats"] = translation.stats.get_data()
@@ -82,32 +62,26 @@ def render_template(template, **kwargs):
     if isinstance(component, Component):
         kwargs["component_name"] = component.name
         kwargs["component_slug"] = component.slug
-        kwargs[
-            "component_remote_branch"
-        ] = component.repository.get_remote_branch_name()
+        kwargs["component_remote_branch"] = (
+            component.repository.get_remote_branch_name()
+        )
         if "url" not in kwargs:
             kwargs["url"] = get_site_url(component.get_absolute_url())
         kwargs["widget_url"] = get_site_url(
             reverse(
                 "widget-image",
                 kwargs={
-                    "project": component.project.slug,
-                    "component": component.slug,
+                    "path": component.get_url_path(),
                     "widget": "horizontal",
                     "color": "auto",
                     "extension": "svg",
                 },
             )
         )
-        if component.linked_childs:
-            kwargs["component_linked_childs"] = [
-                {
-                    "project_name": linked.project.name,
-                    "name": linked.name,
-                    "url": get_site_url(linked.get_absolute_url()),
-                }
-                for linked in component.linked_childs
-            ]
+        if component.pk:
+            kwargs["component_linked_childs"] = SimpleLazyObject(
+                component.get_linked_childs_for_template
+            )
         project = component.project
         kwargs.pop("component", None)
 
@@ -127,26 +101,33 @@ def render_template(template, **kwargs):
         )
 
 
-def validate_render(value, **kwargs):
-    """Validates rendered template."""
+def validate_render(value: str, **kwargs) -> str:
+    """Validate rendered template."""
     try:
         return render_template(value, **kwargs)
     except Exception as err:
-        raise ValidationError(_("Failed to render template: {}").format(err))
+        raise ValidationError(
+            gettext("Could not render template: {}").format(err)
+        ) from err
 
 
-def validate_render_component(value, translation=None, **kwargs):
+def validate_render_mock(value: str, *, translation: bool = False, **kwargs) -> str:
     from weblate.lang.models import Language
     from weblate.trans.models import Component, Project, Translation
+    from weblate.utils.stats import DummyTranslationStats
 
+    project = Project(name="project", slug="project", id=-1)
+    project.stats = DummyTranslationStats(project)  # type: ignore[assignment]
     component = Component(
-        project=Project(name="project", slug="project", id=-1),
+        project=project,
         name="component",
         slug="component",
         branch="main",
+        source_language=Language(name="aa", code="x-aa"),
         vcs="git",
         id=-1,
     )
+    component.stats = DummyTranslationStats(component)  # type: ignore[assignment]
     if translation:
         kwargs["translation"] = Translation(
             id=-1,
@@ -154,60 +135,61 @@ def validate_render_component(value, translation=None, **kwargs):
             language_code="xx",
             language=Language(name="xxx", code="xx"),
         )
+        kwargs["translation"].stats = DummyTranslationStats(translation)
     else:
         kwargs["component"] = component
-    validate_render(value, **kwargs)
+    return validate_render(value, **kwargs)
 
 
-def validate_render_addon(value):
-    validate_render_component(value, hook_name="addon", addon_name="addon")
+def validate_render_translation(value: str) -> None:
+    validate_render_mock(value, translation=True)
 
 
-def validate_render_commit(value):
-    validate_render_component(value, translation=True, author="author")
+def validate_render_component(value: str) -> None:
+    validate_render_mock(value)
 
 
-def validate_repoweb(val):
-    """Validate whether URL for repository browser is valid.
+def validate_render_addon(value: str) -> None:
+    validate_render_mock(value, hook_name="addon", addon_name="addon")
+
+
+def validate_render_commit(value: str) -> None:
+    validate_render_mock(value, translation=True, author="author")
+
+
+def validate_repoweb(val: str, allow_editor: bool = False) -> None:
+    """
+    Validate whether URL for repository browser is valid.
 
     It checks whether it can be filled in using format string.
     """
     if "%(file)s" in val or "%(line)s" in val:
         raise ValidationError(
-            _(
+            gettext(
                 "The format strings are no longer supported, "
                 "please use the template language instead."
             )
         )
-    validate_render(val, filename="file.po", line=9, branch="main")
+    url = validate_render_mock(val, filename="file.po", line=9, branch="main")
+
+    validator: URLValidator
+    if (
+        allow_editor
+        and val.split("://")[0].lower() in WeblateEditorURLValidator.schemes
+    ):
+        validator = WeblateEditorURLValidator()
+    else:
+        validator = WeblateURLValidator()
+    validator(url)
 
 
-def validate_editor(val):
-    """Validate URL for custom editor link.
+def validate_editor(val: str) -> None:
+    """
+    Validate URL for custom editor link.
 
     - Check whether it correctly uses format strings.
     - Check whether scheme is sane.
     """
     if not val:
         return
-    validate_repoweb(val)
-
-    if ":" not in val:
-        raise ValidationError(_("The editor link lacks URL scheme!"))
-
-    scheme = val.split(":", 1)[0]
-
-    # Block forbidden schemes as well as format strings
-    if scheme.strip().lower() in FORBIDDEN_URL_SCHEMES or "%" in scheme:
-        raise ValidationError(_("Forbidden URL scheme!"))
-
-
-def migrate_repoweb(val):
-    return val % {
-        "file": "{{filename}}",
-        "../file": "{{filename|parentdir}}",
-        "../../file": "{{filename|parentdir|parentdir}}",
-        "../../../file": "{{filename|parentdir|parentdir}}",
-        "line": "{{line}}",
-        "branch": "{{branch}}",
-    }
+    validate_repoweb(val, allow_editor=True)

@@ -1,27 +1,16 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 from functools import reduce
 
-from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext
 
-from .base import MachineTranslation
+from .base import (
+    DownloadTranslations,
+    ResponseStatusMachineTranslation,
+)
 from .forms import URLMachineryForm
 
 LANGUAGE_MAP = {
@@ -41,7 +30,7 @@ LANGUAGE_MAP = {
     "sr": "hbs",
     "nb_NO": "nob",
     "nn": "nno",
-    "se": "sme",
+    "se": "sme",  # codespell:ignore sme
     "oc": "oci",
     "pt": "por",
     "co": "cos",
@@ -72,9 +61,9 @@ LANGUAGE_MAP = {
     "lv": "lvs",
     "as": "asm",
     "hi": "hin",
-    "te": "tel",
+    "te": "tel",  # codespell:ignore te
     "hy": "hye",
-    "th": "tha",
+    "th": "tha",  # codespell:ignore tha
     "mk": "mkd",
     "la": "lat",
     "ga": "gle",
@@ -84,18 +73,13 @@ LANGUAGE_MAP = {
 }
 
 
-class ApertiumAPYTranslation(MachineTranslation):
+class ApertiumAPYTranslation(ResponseStatusMachineTranslation):
     """Apertium machine translation support."""
 
     name = "Apertium APy"
-    max_score = 90
+    max_score = 88
     settings_form = URLMachineryForm
-
-    @staticmethod
-    def migrate_settings():
-        return {
-            "url": settings.MT_APERTIUM_APY.rstrip("/"),
-        }
+    request_timeout = 20
 
     @property
     def all_langs(self):
@@ -110,37 +94,58 @@ class ApertiumAPYTranslation(MachineTranslation):
             return LANGUAGE_MAP[code]
         return code
 
+    def validate_settings(self) -> None:
+        try:
+            languages = self.download_languages()
+        except Exception as error:
+            raise ValidationError(
+                gettext("Could not fetch supported languages: %s") % error
+            ) from error
+        try:
+            source_language, target_language = languages[0]
+        except IndexError as error:
+            raise ValidationError(
+                gettext("No supported languages found: %s") % error
+            ) from error
+        try:
+            self.download_multiple_translations(
+                source_language, target_language, [("test", None)], None, 75
+            )
+        except Exception as error:
+            raise ValidationError(
+                gettext("Could not fetch translation: %s") % error
+            ) from error
+
     def download_languages(self):
         """Download list of supported languages from a service."""
-        data = self.request_status("get", self.get_api_url("listPairs"))
+        data = self.request("get", self.get_api_url("listPairs")).json()
         return [
             (item["sourceLanguage"], item["targetLanguage"])
             for item in data["responseData"]
         ]
 
-    def is_supported(self, source, language):
+    def is_supported(self, source_language, target_language):
         """Check whether given language combination is supported."""
-        return (source, language) in self.supported_languages
+        return (source_language, target_language) in self.supported_languages
 
     def download_translations(
         self,
-        source,
-        language,
+        source_language,
+        target_language,
         text: str,
         unit,
         user,
-        search: bool,
         threshold: int = 75,
-    ):
+    ) -> DownloadTranslations:
         """Download list of possible translations from Apertium."""
         args = {
-            "langpair": f"{source}|{language}",
+            "langpair": f"{source_language}|{target_language}",
             "q": text,
             "markUnknown": "no",
         }
-        response = self.request_status(
+        response = self.request(
             "get", self.get_api_url("translate"), params=args
-        )
+        ).json()
 
         yield {
             "text": response["responseData"]["translatedText"],

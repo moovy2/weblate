@@ -1,43 +1,70 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
-from weblate.accounts.notifications import (
-    FREQ_INSTANT,
-    SCOPE_ADMIN,
-    SCOPE_ALL,
-    SCOPE_WATCHED,
-)
+from typing import TYPE_CHECKING
+
+from weblate.accounts.notifications import NotificationFrequency, NotificationScope
+
+if TYPE_CHECKING:
+    from weblate.auth.models import User
 
 DEFAULT_NOTIFICATIONS = [
-    (SCOPE_ALL, FREQ_INSTANT, "MentionCommentNotificaton"),
-    (SCOPE_WATCHED, FREQ_INSTANT, "LastAuthorCommentNotificaton"),
-    (SCOPE_WATCHED, FREQ_INSTANT, "MentionCommentNotificaton"),
-    (SCOPE_WATCHED, FREQ_INSTANT, "NewAnnouncementNotificaton"),
-    (SCOPE_ADMIN, FREQ_INSTANT, "MergeFailureNotification"),
-    (SCOPE_ADMIN, FREQ_INSTANT, "ParseErrorNotification"),
-    (SCOPE_ADMIN, FREQ_INSTANT, "NewTranslationNotificaton"),
-    (SCOPE_ADMIN, FREQ_INSTANT, "NewAlertNotificaton"),
-    (SCOPE_ADMIN, FREQ_INSTANT, "NewAnnouncementNotificaton"),
+    (
+        NotificationScope.SCOPE_ALL,
+        NotificationFrequency.FREQ_INSTANT,
+        "MentionCommentNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_WATCHED,
+        NotificationFrequency.FREQ_INSTANT,
+        "LastAuthorCommentNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_WATCHED,
+        NotificationFrequency.FREQ_INSTANT,
+        "MentionCommentNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_WATCHED,
+        NotificationFrequency.FREQ_INSTANT,
+        "NewAnnouncementNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_WATCHED,
+        NotificationFrequency.FREQ_WEEKLY,
+        "NewStringNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_ADMIN,
+        NotificationFrequency.FREQ_INSTANT,
+        "MergeFailureNotification",
+    ),
+    (
+        NotificationScope.SCOPE_ADMIN,
+        NotificationFrequency.FREQ_INSTANT,
+        "ParseErrorNotification",
+    ),
+    (
+        NotificationScope.SCOPE_ADMIN,
+        NotificationFrequency.FREQ_INSTANT,
+        "NewTranslationNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_ADMIN,
+        NotificationFrequency.FREQ_INSTANT,
+        "NewAlertNotificaton",
+    ),
+    (
+        NotificationScope.SCOPE_ADMIN,
+        NotificationFrequency.FREQ_INSTANT,
+        "NewAnnouncementNotificaton",
+    ),
 ]
 
 
-def create_default_notifications(user):
+def create_default_notifications(user: User) -> None:
     for scope, frequency, notification in DEFAULT_NOTIFICATIONS:
         user.subscription_set.get_or_create(
             scope=scope, notification=notification, defaults={"frequency": frequency}

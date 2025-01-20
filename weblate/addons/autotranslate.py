@@ -1,39 +1,32 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from datetime import date
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from django.conf import settings
-from django.db import transaction
-from django.utils.translation import gettext_lazy as _
+from django.utils import timezone
+from django.utils.translation import gettext_lazy
 
 from weblate.addons.base import BaseAddon
-from weblate.addons.events import EVENT_COMPONENT_UPDATE, EVENT_DAILY
+from weblate.addons.events import AddonEvent
 from weblate.addons.forms import AutoAddonForm
 from weblate.trans.tasks import auto_translate_component
 
+if TYPE_CHECKING:
+    from weblate.trans.models import Component
+
 
 class AutoTranslateAddon(BaseAddon):
-    events = (EVENT_COMPONENT_UPDATE, EVENT_DAILY)
+    events: set[AddonEvent] = {
+        AddonEvent.EVENT_COMPONENT_UPDATE,
+        AddonEvent.EVENT_DAILY,
+    }
     name = "weblate.autotranslate.autotranslate"
-    verbose = _("Automatic translation")
-    description = _(
+    verbose = gettext_lazy("Automatic translation")
+    description = gettext_lazy(
         "Automatically translates strings using machine translation or "
         "other components."
     )
@@ -41,20 +34,18 @@ class AutoTranslateAddon(BaseAddon):
     multiple = True
     icon = "language.svg"
 
-    def component_update(self, component):
-        transaction.on_commit(
-            lambda: auto_translate_component.delay(
-                component.pk, **self.instance.configuration
-            )
+    def component_update(self, component: Component) -> None:
+        auto_translate_component.delay_on_commit(
+            component.pk, **self.instance.configuration
         )
 
-    def daily(self, component):
+    def daily(self, component: Component) -> None:
         # Translate every component less frequenctly to reduce load.
         # The translation is anyway triggered on update, so it should
         # not matter that much that we run this less often.
         if settings.BACKGROUND_TASKS == "never":
             return
-        today = date.today()
+        today = timezone.now()
         if settings.BACKGROUND_TASKS == "monthly" and component.id % 30 != today.day:
             return
         if (

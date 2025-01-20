@@ -1,26 +1,12 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 import hashlib
 import os.path
 from ssl import CertificateError
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from django.conf import settings
@@ -33,21 +19,19 @@ from django.utils.translation import gettext, pgettext
 from weblate.utils.errors import report_error
 from weblate.utils.requests import request
 
+if TYPE_CHECKING:
+    from weblate.auth.models import User
 
-def avatar_for_email(email, size=80):
+
+def avatar_for_email(email, size=80) -> str:
     """Generate url for avatar."""
     # Safely handle blank e-mail
     if not email:
         email = "noreply@weblate.org"
 
-    mail_hash = hashlib.md5(email.lower().encode()).hexdigest()  # nosec
+    mail_hash = hashlib.md5(email.lower().encode(), usedforsecurity=False).hexdigest()
 
-    return "{}avatar/{}?d={}&s={}".format(
-        settings.AVATAR_URL_PREFIX,
-        mail_hash,
-        quote(settings.AVATAR_DEFAULT_IMAGE),
-        str(size),
-    )
+    return f"{settings.AVATAR_URL_PREFIX}avatar/{mail_hash}?d={quote(settings.AVATAR_DEFAULT_IMAGE)}&s={size!s}"
 
 
 def get_fallback_avatar_url(size: int):
@@ -62,7 +46,7 @@ def get_fallback_avatar(size: int):
         return handle.read()
 
 
-def get_avatar_image(user, size: int):
+def get_avatar_image(user: User, size: int):
     """Return avatar image from cache (if available) or download it."""
     username = user.username
     cache_key = "-".join(("avatar-img", username, str(size)))
@@ -79,7 +63,7 @@ def get_avatar_image(user, size: int):
             image = download_avatar_image(user.email, size)
             cache.set(cache_key, image)
         except (OSError, CertificateError):
-            report_error(cause=f"Failed to fetch avatar for {username}")
+            report_error(f"Could not fetch avatar for {username}")
             return get_fallback_avatar(size)
 
     return image
@@ -92,7 +76,7 @@ def download_avatar_image(email: str, size: int):
     return response.content
 
 
-def get_user_display(user, icon: bool = True, link: bool = False):
+def get_user_display(user: User, icon: bool = True, link: bool = False):
     """Nicely format user for display."""
     # Did we get any user?
     if user is None:

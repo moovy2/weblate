@@ -1,36 +1,24 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 import json
 import os
 import subprocess
+from contextlib import suppress
+from typing import TYPE_CHECKING
 from zipfile import BadZipfile
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.forms import HiddenInput
+from django.forms import Form, HiddenInput
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.functional import cached_property
 from django.utils.http import urlencode
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext
 from django.views.generic.edit import CreateView
 
 from weblate.trans.backups import ProjectBackup
@@ -40,6 +28,7 @@ from weblate.trans.forms import (
     ComponentDiscoverForm,
     ComponentDocCreateForm,
     ComponentInitCreateForm,
+    ComponentProjectForm,
     ComponentScratchCreateForm,
     ComponentSelectForm,
     ComponentZipCreateForm,
@@ -47,7 +36,7 @@ from weblate.trans.forms import (
     ProjectImportCreateForm,
     ProjectImportForm,
 )
-from weblate.trans.models import Component, Project
+from weblate.trans.models import Category, Component, Project
 from weblate.trans.tasks import perform_update
 from weblate.trans.util import get_clean_env
 from weblate.utils import messages
@@ -57,9 +46,13 @@ from weblate.utils.ratelimit import session_ratelimit_post
 from weblate.utils.views import create_component_from_doc, create_component_from_zip
 from weblate.vcs.models import VCS_REGISTRY
 
+if TYPE_CHECKING:
+    from weblate.auth.models import AuthenticatedHttpRequest
+    from weblate.trans.models.component import ComponentQuerySet
+
 
 class BaseCreateView(CreateView):
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self.has_billing = "weblate.billing" in settings.INSTALLED_APPS
 
@@ -73,7 +66,8 @@ class BaseCreateView(CreateView):
 @method_decorator(session_ratelimit_post("project"), name="dispatch")
 class CreateProject(BaseCreateView):
     model = Project
-    form_class = ProjectCreateForm
+    object: Project
+    form_class: type[Form] = ProjectCreateForm
     billings = None
 
     def get_form(self, form_class=None):
@@ -82,10 +76,8 @@ class CreateProject(BaseCreateView):
             billing_field = form.fields["billing"]
             if self.has_billing:
                 billing_field.queryset = self.billings
-                try:
+                with suppress(ValueError, KeyError):
                     billing_field.initial = int(self.request.GET["billing"])
-                except (ValueError, KeyError):
-                    pass
                 billing_field.required = not self.request.user.is_superuser
                 if self.request.user.is_superuser:
                     billing_field.empty_label = "-- without billing --"
@@ -108,7 +100,7 @@ class CreateProject(BaseCreateView):
             "project.add"
         )
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: AuthenticatedHttpRequest, *args, **kwargs):
         if not self.can_create():
             return redirect("create-project")
         return super().post(request, *args, **kwargs)
@@ -125,7 +117,7 @@ class CreateProject(BaseCreateView):
             ).exists()
         return kwargs
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: AuthenticatedHttpRequest, *args, **kwargs):
         if self.has_billing:
             from weblate.billing.models import Billing
 
@@ -143,14 +135,14 @@ class ImportProject(CreateProject):
     form_class = ProjectImportForm
     template_name = "trans/project_import.html"
 
-    def setup(self, request, *args, **kwargs):
+    def setup(self, request: AuthenticatedHttpRequest, *args, **kwargs) -> None:
         if "import_project" in request.session and os.path.exists(
             request.session["import_project"]
         ):
-            if "zipfile" in request.POST:
+            if "zipfile" in request.FILES:
                 # Delete previous (stale) import data
-                os.unlink(self.projectbackup.filename)
-                del self.request.session["import_project"]
+                del request.session["import_project"]
+                request.session.pop("import_billing", None)
                 self.projectbackup = None
             else:
                 self.projectbackup = ProjectBackup(request.session["import_project"])
@@ -159,8 +151,19 @@ class ImportProject(CreateProject):
                 self.projectbackup.validate()
         else:
             request.session.pop("import_project", None)
+            request.session.pop("import_billing", None)
             self.projectbackup = None
         super().setup(request, *args, **kwargs)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if "billing" in form.fields and self.has_billing:
+            from weblate.billing.models import Billing
+
+            billing = self.request.session.get("import_billing")
+            if billing:
+                form.fields["billing"].initial = Billing.objects.get(pk=billing)
+        return form
 
     def get_form_class(self):
         """Return the form class to use."""
@@ -174,11 +177,12 @@ class ImportProject(CreateProject):
             kwargs["projectbackup"] = self.projectbackup
         return kwargs
 
-    def post(self, request, *args, **kwargs):
-        if "zipfile" in request.POST and self.projectbackup:
+    def post(self, request: AuthenticatedHttpRequest, *args, **kwargs):
+        if "zipfile" in request.FILES and self.projectbackup:
             # Delete previous (stale) import data
             os.unlink(self.projectbackup.filename)
             del self.request.session["import_project"]
+            self.request.session.pop("import_billing", None)
             self.projectbackup = None
         return super().post(request, *args, **kwargs)
 
@@ -188,6 +192,8 @@ class ImportProject(CreateProject):
             self.request.session["import_project"] = form.cleaned_data[
                 "projectbackup"
             ].store_for_import()
+            if form.cleaned_data["billing"]:
+                self.request.session["import_billing"] = form.cleaned_data["billing"].pk
             return redirect("create-project-import")
         # Perform actual import
         project = self.projectbackup.restore(
@@ -196,10 +202,8 @@ class ImportProject(CreateProject):
             user=self.request.user,
             billing=form.cleaned_data["billing"],
         )
+        del self.request.session["import_project"]
         return redirect(project)
-
-
-# ProjectImportForm
 
 
 @method_decorator(login_required, name="dispatch")
@@ -207,10 +211,12 @@ class CreateComponent(BaseCreateView):
     model = Component
     projects = None
     stage = None
-    selected_project = ""
+    selected_project = None
+    selected_category = None
     basic_fields = ("repo", "name", "slug", "vcs", "source_language")
     empty_form = False
-    form_class = ComponentInitCreateForm
+    form_class: type[ComponentProjectForm] = ComponentInitCreateForm
+    request: AuthenticatedHttpRequest
 
     def get_form_class(self):
         """Return the form class to use."""
@@ -232,24 +238,22 @@ class CreateComponent(BaseCreateView):
         return result
 
     def get_success_url(self):
-        return reverse(
-            "component_progress", kwargs=self.object.get_reverse_url_kwargs()
-        )
+        return reverse("show_progress", kwargs={"path": self.object.get_url_path()})
 
-    def warn_outdated(self, form):
+    def warn_outdated(self, form) -> None:
         linked = form.instance.linked_component
         if linked:
             perform_update.delay("Component", linked.pk, auto=True)
             if linked.repo_needs_merge():
                 messages.warning(
                     self.request,
-                    _(
+                    gettext(
                         "The repository is outdated, you might not get "
                         "expected results until you update it."
                     ),
                 )
 
-    def detect_license(self, form):
+    def detect_license(self, form) -> None:
         """Automatic license detection based on licensee."""
         try:
             process_result = subprocess.run(
@@ -263,18 +267,20 @@ class CreateComponent(BaseCreateView):
             return
         except (OSError, subprocess.CalledProcessError) as error:
             if getattr(error, "returncode", 0) != 1:
-                report_error(cause="Failed licensee invocation")
+                report_error("Failed licensee invocation")
             return
         result = json.loads(process_result.stdout)
         for license_data in result["licenses"]:
             spdx_id = license_data["spdx_id"]
-            for license in (f"{spdx_id}-or-later", f"{spdx_id}-only", spdx_id):
-                if license in LICENSE_URLS:
-                    self.initial["license"] = license
+            for license_id in (f"{spdx_id}-or-later", f"{spdx_id}-only", spdx_id):
+                if license_id in LICENSE_URLS:
+                    self.initial["license"] = license_id
                     messages.info(
                         self.request,
-                        _("Detected license as %s, please check whether it is correct.")
-                        % license,
+                        gettext(
+                            "Detected license as %s, please check whether it is correct."
+                        )
+                        % license_id,
                     )
                     return
 
@@ -283,6 +289,22 @@ class CreateComponent(BaseCreateView):
             form.instance.manage_units = (
                 bool(form.instance.template) or form.instance.file_format == "tbx"
             )
+            if self.duplicate_existing_component and (
+                source_component := form.cleaned_data["source_component"]
+            ):
+                fields_to_duplicate = [
+                    "agreement",
+                    "merge_style",
+                    "commit_message",
+                    "add_message",
+                    "delete_message",
+                    "merge_message",
+                    "addon_message",
+                    "pull_message",
+                ]
+                for field in fields_to_duplicate:
+                    setattr(form.instance, field, getattr(source_component, field))
+
             result = super().form_valid(form)
             self.object.post_create(self.request.user)
             return result
@@ -293,30 +315,38 @@ class CreateComponent(BaseCreateView):
             self.request.method = "GET"
             self.warn_outdated(form)
             self.detect_license(form)
-            return self.get(self, self.request)
+            return self.get(self.request)
         # Move to discover
         self.stage = "discover"
         self.request.method = "GET"
         self.initial = form.cleaned_data
         self.warn_outdated(form)
-        return self.get(self, self.request)
+        return self.get(self.request)
 
     def get_form(self, form_class=None, empty=False):
         self.empty_form = empty
         form = super().get_form(form_class)
         if "project" in form.fields:
             project_field = form.fields["project"]
+            category_field = form.fields["category"]
             project_field.queryset = self.projects
+            category_field.queryset = Category.objects.filter(project__in=self.projects)
             project_field.empty_label = None
             if self.selected_project:
                 project_field.initial = self.selected_project
-                try:
+                with suppress(IndexError):
                     form.fields["source_language"].initial = Component.objects.filter(
                         project=self.selected_project
                     )[0].source_language_id
-                except IndexError:
-                    pass
+                if self.selected_category:
+                    category_field.initial = self.selected_category
         self.empty_form = False
+        if "source_component" in form.fields and self.duplicate_existing_component:
+            self.components = Component.objects.filter(
+                pk=self.duplicate_existing_component
+            )
+            form.fields["source_component"].queryset = self.components
+            form.initial["source_component"] = self.duplicate_existing_component
         return form
 
     def get_context_data(self, **kwargs):
@@ -325,13 +355,19 @@ class CreateComponent(BaseCreateView):
         kwargs["stage"] = self.stage
         return kwargs
 
-    def fetch_params(self, request):
+    def fetch_params(self, request: AuthenticatedHttpRequest) -> None:
         try:
             self.selected_project = int(
                 request.POST.get("project", request.GET.get("project", ""))
             )
         except ValueError:
-            self.selected_project = ""
+            self.selected_project = None
+        try:
+            self.selected_category = int(
+                request.POST.get("category", request.GET.get("category", ""))
+            )
+        except ValueError:
+            self.selected_category = None
         if request.user.is_superuser:
             self.projects = Project.objects.order()
         elif self.has_billing:
@@ -347,12 +383,17 @@ class CreateComponent(BaseCreateView):
             if field in request.GET:
                 self.initial[field] = request.GET[field]
 
+        try:
+            self.duplicate_existing_component = int(request.GET.get("source_component"))
+        except (ValueError, TypeError):
+            self.duplicate_existing_component = None
+
     def has_all_fields(self):
         return self.stage == "init" and all(
             field in self.request.GET for field in self.basic_fields
         )
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: AuthenticatedHttpRequest, *args, **kwargs):
         if "new_base" in request.POST:
             self.stage = "create"
         elif "discovery" in request.POST:
@@ -379,7 +420,7 @@ class CreateFromZip(CreateComponent):
         try:
             create_component_from_zip(form.cleaned_data)
         except BadZipfile:
-            form.add_error("zipfile", _("Failed to parse uploaded ZIP file."))
+            form.add_error("zipfile", gettext("Could not parse uploaded ZIP file."))
             return self.form_invalid(form)
 
         # Move to discover phase
@@ -390,7 +431,7 @@ class CreateFromZip(CreateComponent):
         self.initial["branch"] = "main"
         self.initial.pop("zipfile")
         self.request.method = "GET"
-        return self.get(self, self.request)
+        return self.get(self.request)
 
 
 class CreateFromDoc(CreateComponent):
@@ -400,8 +441,11 @@ class CreateFromDoc(CreateComponent):
         if self.stage != "init":
             return super().form_valid(form)
 
-        fake = create_component_from_doc(form.cleaned_data)
-
+        fake = create_component_from_doc(
+            form.cleaned_data,
+            form.cleaned_data.pop("docfile"),
+            form.cleaned_data.pop("target_language", None),
+        )
         # Move to discover phase
         self.stage = "discover"
         self.initial = form.cleaned_data
@@ -410,16 +454,17 @@ class CreateFromDoc(CreateComponent):
         self.initial["branch"] = "main"
         self.initial["template"] = fake.template
         self.initial["filemask"] = fake.filemask
-        self.initial.pop("docfile")
+
         self.request.method = "GET"
-        return self.get(self, self.request)
+        return self.get(self.request)
 
 
 class CreateComponentSelection(CreateComponent):
     template_name = "trans/component_create.html"
 
-    components = None
-    origin = None
+    components: ComponentQuerySet
+    origin: str | None = None
+    duplicate_existing_component = None
 
     @cached_property
     def branch_data(self):
@@ -438,7 +483,7 @@ class CreateComponentSelection(CreateComponent):
                 result[component.pk] = branches
         return result
 
-    def fetch_params(self, request):
+    def fetch_params(self, request: AuthenticatedHttpRequest) -> None:
         super().fetch_params(request)
         self.components = (
             Component.objects.filter_access(request.user)
@@ -450,6 +495,20 @@ class CreateComponentSelection(CreateComponent):
         if self.selected_project:
             self.components = self.components.filter(project__pk=self.selected_project)
         self.origin = request.POST.get("origin")
+
+        try:
+            self.duplicate_existing_component = int(request.GET.get("component"))
+        except (ValueError, TypeError):
+            self.duplicate_existing_component = None
+        self.initial = {}
+        if self.duplicate_existing_component:
+            source_component = Component.objects.get(
+                pk=self.duplicate_existing_component
+            )
+            self.initial |= {
+                "component": source_component,
+                "is_glossary": source_component.is_glossary,
+            }
 
     def get_context_data(self, **kwargs):
         kwargs = super().get_context_data(**kwargs)
@@ -481,6 +540,10 @@ class CreateComponentSelection(CreateComponent):
             ).order_project()
             form.branch_data = self.branch_data
         elif isinstance(form, ComponentSelectForm):
+            if self.duplicate_existing_component:
+                self.components |= Component.objects.filter_access(
+                    self.request.user
+                ).filter(pk=self.duplicate_existing_component)
             form.fields["component"].queryset = self.components
         return form
 
@@ -501,29 +564,31 @@ class CreateComponentSelection(CreateComponent):
             project = form.cleaned_data["project"]
             component = project.scratch_create_component(**form.cleaned_data)
             return redirect(
-                reverse("component_progress", kwargs=component.get_reverse_url_kwargs())
+                reverse("show_progress", kwargs={"path": component.get_url_path()})
             )
         component = form.cleaned_data["component"]
         if self.origin == "existing":
             return self.redirect_create(
-                repo=component.get_repo_link_url(),
+                repo=component.repo or component.get_repo_link_url(),
                 project=component.project.pk,
+                category=component.category.pk if component.category else "",
                 name=form.cleaned_data["name"],
                 slug=form.cleaned_data["slug"],
+                is_glossary=form.cleaned_data["is_glossary"],
                 vcs=component.vcs,
                 source_language=component.source_language.pk,
+                license=component.license,
+                source_component=component.pk,
             )
         if self.origin == "branch":
             form.instance.save()
             return redirect(
-                reverse(
-                    "component_progress", kwargs=form.instance.get_reverse_url_kwargs()
-                )
+                reverse("show_progress", kwargs={"path": form.instance.get_url_path()})
             )
 
         return redirect("create-component")
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: AuthenticatedHttpRequest, *args, **kwargs):
         if self.origin == "vcs":
             kwargs = {}
             if self.selected_project:

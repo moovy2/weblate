@@ -1,37 +1,25 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 import re
+import threading
 from functools import reduce
 
-import misaka
+import mistletoe
 from django.db.models import Q
 from django.utils.safestring import mark_safe
+from mistletoe import span_token
 
 from weblate.auth.models import User
 
-MENTION_RE = re.compile(r"(@[\w.@+-]+)\b", re.UNICODE)
+MENTION_RE = re.compile(r"(?<!\w)(@[\w.@+-]+)\b")
+MARKDOWN_LOCK = threading.Lock()
 
 
 def get_mention_users(text):
-    """Returns IDs of users mentioned in the text."""
+    """Return IDs of users mentioned in the text."""
     matches = MENTION_RE.findall(text)
     if not matches:
         return User.objects.none()
@@ -40,32 +28,99 @@ def get_mention_users(text):
     )
 
 
-class WeblateHtmlRenderer(misaka.SaferHtmlRenderer):
-    def link(self, content, raw_url, title=""):
-        result = super().link(content, raw_url, title)
-        return result.replace(' href="', ' rel="ugc" target="_blank" href="')
+class SkipHtmlSpan(span_token.HtmlSpan):
+    """A token that strips HTML tags from the content."""
 
-    def check_url(self, url, is_image_src=False):
+    pattern = re.compile(f"{span_token._open_tag}|{span_token._closing_tag}")  # noqa: SLF001
+    parse_inner = False
+    content: str
+
+    def __init__(self, match) -> None:
+        self.content = ""
+
+
+class PlainAutoLink(span_token.AutoLink):
+    pattern = re.compile(r"\b(https?://[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+)\b")
+
+
+class SaferWeblateHtmlRenderer(mistletoe.HtmlRenderer):
+    """
+    A renderer which adds a layer of protection against malicious input.
+
+    1. Check if the URL is valid based on scheme and content
+    2. Strip HTML tags from the content.
+    """
+
+    _allowed_url_re = re.compile(r"^https?://", re.IGNORECASE)
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(SkipHtmlSpan, PlainAutoLink, process_html_tokens=False)
+
+    def render_skip_html_span(self, token: SkipHtmlSpan) -> str:
+        """
+        Render a skip HTML span token.
+
+        Return the content of the token, without any HTML tags.
+        """
+        return token.content
+
+    def render_plain_auto_link(self, token: PlainAutoLink) -> str:
+        """
+        Render a skip HTML span token.
+
+        Return the content of the token, without any HTML tags.
+        """
+        return self.render_auto_link(token)
+
+    def render_link(self, token: span_token.Link) -> str:
+        """
+        Render a link token.
+
+        If the URL is valid, add the necessary attributes to make it open in a new tab.
+        """
+        if self.check_url(token.target):
+            result = super().render_link(token)
+            return result.replace(' href="', ' rel="ugc" target="_blank" href="')
+        return self.escape_html_text(f"[{token.title}]({token.target})")
+
+    def render_auto_link(self, token: span_token.AutoLink | PlainAutoLink) -> str:
+        """
+        Render an auto link token.
+
+        If the URL is valid, render the auto link as usual.
+        Otherwise, escape the URL.
+        """
+
+        def valid_email(email: str) -> bool:
+            """Check if an email address is valid."""
+            pattern = re.compile(
+                r"(mailto:)?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+            )
+            return bool(pattern.match(email))
+
+        if self.check_url(token.target) or valid_email(token.target):
+            return super().render_auto_link(token)
+        return self.escape_html_text(f"<{token.target}>")
+
+    def render_image(self, token: span_token.Image) -> str:
+        """
+        Render an image token.
+
+        If the URL is valid, add the necessary attributes to the image tag.
+        Otherwise, escape the URL.
+        """
+        if self.check_url(token.src):
+            return super().render_image(token)
+        return self.escape_html_text(f"![{token.title}]({token.src})")
+
+    def check_url(self, url: str) -> bool:
+        """Check if an url is valid or not  the scheme."""
         if url.startswith("/user/"):
             return True
-        return super().check_url(url, is_image_src)
+        return bool(self._allowed_url_re.match(url))
 
 
-RENDERER = WeblateHtmlRenderer()
-MARKDOWN = misaka.Markdown(
-    RENDERER,
-    extensions=(
-        "fenced-code",
-        "tables",
-        "autolink",
-        "space-headers",
-        "strikethrough",
-        "superscript",
-    ),
-)
-
-
-def render_markdown(text):
+def render_markdown(text: str) -> str:
     users = {u.username.lower(): u for u in get_mention_users(text)}
     parts = MENTION_RE.split(text)
     for pos, part in enumerate(parts):
@@ -74,8 +129,9 @@ def render_markdown(text):
         username = part[1:].lower()
         if username in users:
             user = users[username]
-            parts[pos] = '**[{}]({} "{}")**'.format(
-                part, user.get_absolute_url(), user.get_visible_name()
+            parts[pos] = (
+                f'**[{part}]({user.get_absolute_url()} "{user.get_visible_name()}")**'
             )
     text = "".join(parts)
-    return mark_safe(MARKDOWN(text))
+    with MARKDOWN_LOCK, SaferWeblateHtmlRenderer() as renderer:
+        return mark_safe(renderer.render(mistletoe.Document(text)))  # noqa: S308

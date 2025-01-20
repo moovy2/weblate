@@ -1,42 +1,34 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 import os
 import shutil
 import stat
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from translation_finder.finder import EXCLUDES
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if TYPE_CHECKING:
+    from pathlib import Path
+
+WEBLATE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(WEBLATE_DIR)
 DEFAULT_DATA_DIR = os.path.join(BASE_DIR, "data")
 DEFAULT_TEST_DIR = os.path.join(BASE_DIR, "data-test")
 BUILD_DIR = os.path.join(BASE_DIR, "build")
 VENV_DIR = os.path.join(BASE_DIR, ".venv")
 DOCS_DIR = os.path.join(BASE_DIR, "docs")
 SCRIPTS_DIR = os.path.join(BASE_DIR, "scripts")
+CLIENT_DIR = os.path.join(BASE_DIR, "client")
 EXAMPLES_DIR = os.path.join(BASE_DIR, "weblate", "examples")
 
 PATH_EXCLUDES = [f"/{exclude}/" for exclude in EXCLUDES]
 
 
-def remove_readonly(func, path, excinfo):
+def remove_readonly(func, path, excinfo) -> None:
     """Clear the readonly bit and reattempt the removal."""
     if isinstance(excinfo[1], FileNotFoundError):
         return
@@ -44,29 +36,33 @@ def remove_readonly(func, path, excinfo):
         os.chmod(path, stat.S_IREAD | stat.S_IWRITE | stat.S_IEXEC)
     else:
         os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
-    if func in (os.open, os.lstat, os.rmdir):
-        # Failed to remove a directory
+    if func in {os.open, os.lstat, os.rmdir}:
+        # Could not remove a directory
         remove_tree(path)
     else:
         func(path)
 
 
-def remove_tree(path: str, ignore_errors: bool = False):
+def remove_tree(path: str | Path, ignore_errors: bool = False) -> None:
+    # TODO: switch to onexc with Python >= 3.12
     shutil.rmtree(path, ignore_errors=ignore_errors, onerror=remove_readonly)
 
 
 def should_skip(location):
     """Check for skipping location in manage commands."""
     location = os.path.abspath(location)
-    return (
-        location.startswith(VENV_DIR)
-        or location.startswith(settings.DATA_DIR)
-        or location.startswith(DEFAULT_DATA_DIR)
-        or location.startswith(BUILD_DIR)
-        or location.startswith(DEFAULT_TEST_DIR)
-        or location.startswith(DOCS_DIR)
-        or location.startswith(SCRIPTS_DIR)
-        or location.startswith(EXAMPLES_DIR)
+    return not location.startswith(WEBLATE_DIR) or location.startswith(
+        (
+            VENV_DIR,
+            settings.DATA_DIR,
+            DEFAULT_DATA_DIR,
+            BUILD_DIR,
+            DEFAULT_TEST_DIR,
+            DOCS_DIR,
+            SCRIPTS_DIR,
+            CLIENT_DIR,
+            EXAMPLES_DIR,
+        )
     )
 
 

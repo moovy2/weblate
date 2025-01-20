@@ -8,8 +8,6 @@ Several optional modules are available for your setup.
 Git exporter
 ------------
 
-.. versionadded:: 2.10
-
 Provides you read-only access to the underlying Git repository using HTTP(S).
 
 Installation
@@ -17,15 +15,23 @@ Installation
 
 1. Add ``weblate.gitexport`` to installed apps in :file:`settings.py`:
 
-.. code-block:: python
+   .. code-block:: python
 
-    INSTALLED_APPS += ("weblate.gitexport",)
+       INSTALLED_APPS += ("weblate.gitexport",)
 
 2. Export existing repositories by migrating your database after installation:
 
-.. code-block:: sh
+   .. code-block:: sh
 
-    weblate migrate
+       weblate migrate
+
+.. hint::
+
+   Git exporter is turned on in our official Docker image. To turn it of, use:
+
+   .. code-block:: sh
+
+      WEBLATE_REMOVE_APPS=weblate.gitexport
 
 Usage
 +++++
@@ -62,8 +68,6 @@ requires an API token which can be obtained in your
 Billing
 -------
 
-.. versionadded:: 2.4
-
 This is used on `Hosted Weblate <https://weblate.org/hosting/>`_ to define
 billing plans, track invoices and usage limits.
 
@@ -82,6 +86,17 @@ Installation
 .. code-block:: sh
 
     weblate migrate
+
+Billing plan creation and assignment
+++++++++++++++++++++++++++++++++++++
+
+You first need to create a billing plan to activate billing. Navigate to the `Administration` section (represented by the wrench icon) and open the `Tools` screen. From there, proceed to the `Django admin interface`.
+
+In the Django admin interface, locate the `BILLING` section and add a billing plan. For instance, you can add a `Free` plan with no cost.
+
+If you wish to assign a billing plan to an existing project, this can also be done within the `Django admin interface` using the `Customer billings` option.
+
+Lastly, the `Django admin interface` provides an `Invoice` option for logging your customer payments.
 
 Usage
 +++++
@@ -109,8 +124,6 @@ for the project in case he has access to more of them.
 Legal
 -----
 
-.. versionadded:: 2.15
-
 This is used on `Hosted Weblate <https://weblate.org/hosting/>`_ to provide required
 legal documents. It comes provided with blank documents, and you are expected to fill out the
 following templates in the documents:
@@ -121,6 +134,10 @@ following templates in the documents:
    Privacy policy document
 :file:`legal/documents/summary.html`
    Short overview of the terms of service and privacy policy
+
+On changing the terms of service documents, please adjust
+:setting:`LEGAL_TOS_DATE` so that users are forced to agree with the updated
+documents.
 
 .. note::
 
@@ -217,22 +234,33 @@ Following content is sent to Akismet for checking:
 Signing Git commits with GnuPG
 ------------------------------
 
-.. versionadded:: 3.1
-
 All commits can be signed by the GnuPG key of the Weblate instance.
 
-1. Turn on :setting:`WEBLATE_GPG_IDENTITY`. (Weblate will generate a GnuPG
-key when needed and will use it to sign all translation commits.)
+* Turn on :setting:`WEBLATE_GPG_IDENTITY`. (Weblate will generate a GnuPG
+  key when needed and will use it to sign all translation commits.)
 
-This feature needs GnuPG 2.1 or newer installed.
+  This feature needs GnuPG 2.1 or newer installed.
 
-You can find the key in the :setting:`DATA_DIR` and the public key is shown on
-the "About" page:
+  You can find the key in the :setting:`DATA_DIR` and the public key is shown
+  on the "About" page:
 
-.. image:: /screenshots/about-gpg.png
+  .. image:: /screenshots/about-gpg.webp
 
-2. Alternatively you can also import existing keys into Weblate, just set
-``HOME=$DATA_DIR/home`` when invoking gpg.
+* Alternatively you can also import existing keys into Weblate, just set
+  ``HOME=$DATA_DIR/home`` when invoking gpg.
+
+.. hint::
+
+   The key material is cached by Weblate for a long period. In case you let
+   Weblate generate a key with :setting:`WEBLATE_GPG_IDENTITY` and then import
+   key with the same identity to use an existing key, purging redis cache is
+   recommended to see the effect of such change.
+
+
+.. note::
+
+   When sharing :setting:`DATA_DIR` between multiple hosts, please follow instructions
+   at https://wiki.gnupg.org/NFS to make GnuPG signing work reliably.
 
 .. seealso::
 
@@ -243,13 +271,9 @@ the "About" page:
 Rate limiting
 -------------
 
-.. versionchanged:: 3.2
-
-      The rate limiting now accepts more fine-grained configuration.
-
 .. versionchanged:: 4.6
 
-      The rate limiting no longer applies to superusers.
+      The rate limiting no longer applies to signed in superusers.
 
 Several operations in Weblate are rate limited. At most
 :setting:`RATELIMIT_ATTEMPTS` attempts are allowed within :setting:`RATELIMIT_WINDOW` seconds.
@@ -260,23 +284,25 @@ The following operations are subject to rate limiting:
 +-----------------------------------+--------------------+------------------+------------------+----------------+
 | Name                              | Scope              | Allowed attempts | Ratelimit window | Lockout period |
 +===================================+====================+==================+==================+================+
-| Registration                      | ``REGISTRATION``   |                5 |              300 |            600 |
+| Registration                      | ``REGISTRATION``   | 5                | 300              | 600            |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Sending message to admins         | ``MESSAGE``        |                5 |              300 |            600 |
+| Sending message to admins         | ``MESSAGE``        | 2                | 300              | 600            |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Password authentication on sign in| ``LOGIN``          |                5 |              300 |            600 |
+| Password authentication on sign in| ``LOGIN``          | 5                | 300              | 600            |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Sitewide search                   | ``SEARCH``         |                6 |               60 |             60 |
+| Sitewide search                   | ``SEARCH``         | 6                | 60               | 60             |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Translating                       | ``TRANSLATE``      |               30 |               60 |            600 |
+| Translating                       | ``TRANSLATE``      | 30               | 60               | 600            |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Adding to glossary                | ``GLOSSARY``       |               30 |               60 |            600 |
+| Adding to glossary                | ``GLOSSARY``       | 30               | 60               | 600            |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Starting translation into a new   | ``LANGUAGE``       |                2 |              300 |            600 |
+| Starting translation into a new   | ``LANGUAGE``       | 2                | 300              | 600            |
 | language                          |                    |                  |                  |                |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
-| Creating new project              | ``PROJECT``        |                5 |              600 |            600 |
+| Creating new project              | ``PROJECT``        | 5                | 600              | 600            |
 +-----------------------------------+--------------------+------------------+------------------+----------------+
+
+The rate limiting is based on sessions when user is signed in and on IP address if not.
 
 If a user fails to sign in :setting:`AUTH_LOCK_ATTEMPTS` times, password authentication will be turned off on the account until having gone through the process of having its password reset.
 
@@ -290,6 +316,8 @@ The API has separate rate limiting settings, see :ref:`api-rate`.
    :ref:`reverse-proxy`,
    :ref:`api-rate`
 
+.. _fedora-messaging:
+
 Fedora Messaging integration
 ----------------------------
 
@@ -299,3 +327,7 @@ You can hook additional services on changes happening in Weblate using this.
 The Fedora Messaging integration is available as a separate Python module
 ``weblate-fedora-messaging``. Please see
 <https://github.com/WeblateOrg/fedora_messaging/> for setup instructions.
+
+.. seealso::
+
+   :ref:`schema-messaging`

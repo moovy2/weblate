@@ -9,9 +9,11 @@ functionality, and verify that it works.
 Continuous integration
 ++++++++++++++++++++++
 
-Current test results can be found on
-`GitHub Actions <https://github.com/WeblateOrg/weblate/actions>`_ and coverage
-is reported on `Codecov <https://codecov.io/github/WeblateOrg/weblate>`_.
+Current test results can be found on `GitHub Actions`_ and coverage is reported
+on `Codecov`_.
+
+.. _GitHub Actions: https://github.com/WeblateOrg/weblate/actions
+.. _Codecov: https://app.codecov.io/gh/WeblateOrg/weblate/
 
 There are several jobs to verify different aspects:
 
@@ -24,17 +26,17 @@ There are several jobs to verify different aspects:
 The configuration for the CI is in :file:`.github/workflows` directory. It
 heavily uses helper scripts stored in :file:`ci` directory. The scripts can be
 also executed manually, but they require several environment variables, mostly
-defining Django settings file to use and database connection. The example
-definition of that is in :file:`scripts/test-database`:
+defining Django settings file to use and test database connection. The example
+definition of that is in :file:`scripts/test-database.sh`:
 
-.. literalinclude:: ../../scripts/test-database
+.. literalinclude:: ../../scripts/test-database.sh
    :language: sh
 
 The simple execution can look like:
 
 .. code-block:: sh
 
-   . scripts/test-database
+   source scripts/test-database.sh
    ./ci/run-migrate
    ./ci/run-test
    ./ci/run-docs
@@ -44,11 +46,28 @@ The simple execution can look like:
 Local testing
 +++++++++++++
 
-To run a testsuite locally, use:
+Before running test, please ensure test dependencies are installed. This can be done by ``pip install -e .[test]``.
+
+Testing using pytest
+~~~~~~~~~~~~~~~~~~~~
+
+Prior to running tests you should collect static files as some tests rely on them being present:
 
 .. code-block:: sh
 
-    DJANGO_SETTINGS_MODULE=weblate.settings_test ./manage.py test
+    DJANGO_SETTINGS_MODULE=weblate.settings_test ./manage.py collectstatic
+
+You can use `pytest` to run a testsuite locally:
+
+.. code-block:: sh
+
+   pytest weblate
+
+Running an individual test file:
+
+.. code-block:: sh
+
+   pytest weblate/utils/tests/test_search.py
 
 .. hint::
 
@@ -61,20 +80,14 @@ To run a testsuite locally, use:
 The :file:`weblate/settings_test.py` is used in CI environment as well (see
 :ref:`ci-tests`) and can be tuned using environment variables:
 
-.. literalinclude:: ../../scripts/test-database
-   :language: sh
-
-Prior to running tests you should collect static files as some tests rely on them being present:
-
 .. code-block:: sh
 
-    DJANGO_SETTINGS_MODULE=weblate.settings_test ./manage.py collectstatic
-
-You can also specify individual tests to run:
-
-.. code-block:: sh
-
-    DJANGO_SETTINGS_MODULE=weblate.settings_test ./manage.py test weblate.gitexport
+   export CI_DATABASE=postgresql
+   export CI_DB_USER=weblate
+   export CI_DB_PASSWORD=weblate
+   export CI_DB_HOST=127.0.0.1
+   export CI_DB_PORT=60000
+   export DJANGO_SETTINGS_MODULE=weblate.settings_test
 
 .. hint::
 

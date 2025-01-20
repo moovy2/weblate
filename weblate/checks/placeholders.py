@@ -1,30 +1,22 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Any, Literal
 
+from django.utils.functional import SimpleLazyObject
 from django.utils.html import escape, format_html, format_html_join
-from django.utils.translation import gettext_lazy as _
+from django.utils.safestring import mark_safe
+from django.utils.translation import gettext_lazy
 
 from weblate.checks.base import TargetCheckParametrized
 from weblate.checks.parser import multi_value_flag, single_value_flag
+
+if TYPE_CHECKING:
+    from weblate.trans.models import Unit
 
 
 def parse_regex(val):
@@ -36,14 +28,14 @@ def parse_regex(val):
 class PlaceholderCheck(TargetCheckParametrized):
     check_id = "placeholders"
     default_disabled = True
-    name = _("Placeholders")
-    description = _("Translation is missing some placeholders")
+    name = gettext_lazy("Placeholders")
+    description = gettext_lazy("Translation is missing some placeholders")
 
     @property
     def param_type(self):
         return multi_value_flag(lambda x: x)
 
-    def get_value(self, unit):
+    def get_value(self, unit: Unit):
         return re.compile(
             "|".join(
                 re.escape(param) if isinstance(param, str) else param.pattern
@@ -72,8 +64,19 @@ class PlaceholderCheck(TargetCheckParametrized):
             {found_fold[v] for v in found_set - expected_set},
         )
 
-    def check_target_params(self, sources, targets, unit, value):
-        expected = set(self.get_matches(value, unit.source_string))
+    def check_target_unit(  # type: ignore[override]
+        self, sources: list[str], targets: list[str], unit: Unit
+    ) -> Literal[False] | dict[str, Any]:
+        # TODO: this is type annotation hack, instead the check should have a proper return type
+        return super().check_target_unit(sources, targets, unit)  # type: ignore[return-value]
+
+    def check_target_params(  # type: ignore[override]
+        self, sources: list[str], targets: list[str], unit: Unit, value
+    ) -> Literal[False] | dict[str, Any]:
+        expected = set(self.get_matches(value, sources[0]))
+        if not expected and len(sources) > 1:
+            expected = set(self.get_matches(value, sources[-1]))
+        plural_examples = SimpleLazyObject(lambda: unit.translation.plural.examples)
 
         if "case-insensitive" in unit.all_flags:
             diff_func = self.diff_case_insensitive
@@ -83,17 +86,24 @@ class PlaceholderCheck(TargetCheckParametrized):
         missing = set()
         extra = set()
 
-        for target in targets:
+        for pluralno, target in enumerate(targets):
             found = set(self.get_matches(value, target))
             diff = diff_func(expected, found)
-            missing.update(diff[0])
+            plural_example = plural_examples[pluralno]
+            # Allow to skip format string in case there is single plural or in special
+            # case of 0, 1 plural. It is technically wrong, but in many cases there
+            # won't be 0 so don't trigger too many false positives
+            if len(targets) == 1 or (
+                len(plural_example) > 1 and plural_example != ["0", "1"]
+            ):
+                missing.update(diff[0])
             extra.update(diff[1])
 
         if missing or extra:
             return {"missing": missing, "extra": extra}
         return False
 
-    def check_highlight(self, source, unit):
+    def check_highlight(self, source: str, unit: Unit):
         if self.should_skip(unit):
             return
 
@@ -117,29 +127,33 @@ class PlaceholderCheck(TargetCheckParametrized):
             errors.append(self.get_extra_text(result["extra"]))
 
         return format_html_join(
-            format_html("<br />"), "{}", ((error,) for error in errors)
+            mark_safe("<br />"),  # noqa: S308
+            "{}",
+            ((error,) for error in errors),
         )
 
 
 class RegexCheck(TargetCheckParametrized):
     check_id = "regex"
     default_disabled = True
-    name = _("Regular expression")
-    description = _("Translation does not match regular expression")
+    name = gettext_lazy("Regular expression")
+    description = gettext_lazy("Translation does not match regular expression")
 
     @property
     def param_type(self):
         return single_value_flag(parse_regex)
 
-    def check_target_params(self, sources, targets, unit, value):
+    def check_target_params(
+        self, sources: list[str], targets: list[str], unit: Unit, value
+    ):
         return any(not value.findall(target) for target in targets)
 
-    def should_skip(self, unit):
+    def should_skip(self, unit: Unit) -> bool:
         if super().should_skip(unit):
             return True
         return not self.get_value(unit).pattern
 
-    def check_highlight(self, source, unit):
+    def check_highlight(self, source: str, unit: Unit):
         if self.should_skip(unit):
             return
 
@@ -154,6 +168,6 @@ class RegexCheck(TargetCheckParametrized):
             return super().get_description(check_obj)
         regex = self.get_value(unit)
         return format_html(
-            escape(_("Does not match regular expression {}.")),
+            escape(gettext_lazy("Does not match regular expression {}.")),
             format_html("<code>{}</code>", regex.pattern),
         )

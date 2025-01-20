@@ -1,46 +1,62 @@
+# Copyright © Michal Čihař <michal@weblate.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 name: jsonschema update
 
 on:
   push:
     branches:
-    - dependabot/**
     - deepsource-fix-**
     - renovate/**
     - main
     paths:
     - .github/workflows/schema-update.yml
-    - requirements.txt
+    - pyproject.toml
     - docs/Makefile
+
+permissions:
+  contents: read
 
 jobs:
   jsonschema-update:
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: write
-      pull-requests: write
+    runs-on: ubuntu-24.04
 
     steps:
-    - uses: actions/checkout@v3.1.0
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - uses: actions/checkout@v4
       with:
-        python-version: '3.10'
-    - run: pip install $(grep -E '^(weblate-schemas)==' requirements.txt) -r requirements-lint.txt
+        token: ${{ secrets.WEBLATE_CI_TOKEN }}
+    - uses: astral-sh/setup-uv@v5
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+    - name: Install Python dependencies
+      run: |
+        uv pip install --system $(sed -n 's/.*"\(weblate-schemas==\([^"]*\)\)".*/\1/p' pyproject.toml)
+        uv pip install --system $(sed -n 's/.*"\(pre-commit==\([^"]*\)\)".*/\1/p' pyproject.toml)
     - run: make -C docs update-schemas
     - run: pre-commit run --files $(git diff --name-only)
       continue-on-error: true
-    - name: Update dependabot branch
+    - name: Update renovate branch
       if: github.ref != 'refs/heads/main'
-      uses: stefanzweifel/git-auto-commit-action@v4
+      uses: stefanzweifel/git-auto-commit-action@v5
       with:
         commit_message: 'docs: Update JSON schemas'
     - name: Create Pull Request
+      id: cpr
       if: github.ref == 'refs/heads/main'
-      uses: peter-evans/create-pull-request@v4
+      uses: peter-evans/create-pull-request@v7
       with:
         branch: create-pull-request/jsonschema-update
         title: 'docs: Update JSON schemas'
         commit-message: 'docs: Update JSON schemas'
+        token: ${{ secrets.WEBLATE_CI_TOKEN }}
         labels: |
           dependencies
-          automerge
+
+    - name: Enable Pull Request Automerge
+      if: github.ref == 'refs/heads/main' && steps.cpr.outputs.pull-request-operation != 'none'
+      run: gh pr merge --rebase --auto "${{ steps.cpr.outputs.pull-request-number }}"
+      env:
+        GH_TOKEN: ${{ secrets.WEBLATE_CI_TOKEN }}

@@ -1,45 +1,31 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Setting
+from .models import Setting, SettingCategory
 from .views import CustomCSSView
 
 
 class SettingsTestCase(TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
         CustomCSSView.drop_cache()
 
-    def test_blank(self):
+    def test_blank(self) -> None:
         response = self.client.get(reverse("css-custom"))
         self.assertEqual(response.content.decode().strip(), "")
 
-    def test_cache(self):
+    def test_cache(self) -> None:
         Setting.objects.create(
-            category=Setting.CATEGORY_UI, name="hide_footer", value=True
+            category=SettingCategory.UI, name="hide_footer", value=True
         )
         response = self.client.get(reverse("css-custom"))
         self.assertNotEqual(response.content.decode().strip(), "")
         # Delete all UI settings
-        Setting.objects.filter(category=Setting.CATEGORY_UI).delete()
+        Setting.objects.filter(category=SettingCategory.UI).delete()
         # The response should be cached
         response = self.client.get(reverse("css-custom"))
         self.assertNotEqual(response.content.decode().strip(), "")
@@ -47,3 +33,11 @@ class SettingsTestCase(TestCase):
         CustomCSSView.drop_cache()
         response = self.client.get(reverse("css-custom"))
         self.assertEqual(response.content.decode().strip(), "")
+
+    def test_split_colors(self):
+        self.assertEqual([None, None], CustomCSSView.split_colors(""))
+        self.assertEqual([None, None], CustomCSSView.split_colors(None))
+        self.assertEqual(["#ffffff", "#ffffff"], CustomCSSView.split_colors("#ffffff"))
+        self.assertEqual(
+            ["#ffffff", "#000000"], CustomCSSView.split_colors("#ffffff,#000000")
+        )

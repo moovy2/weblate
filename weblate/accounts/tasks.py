@@ -1,51 +1,47 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
+import logging
 import os
-import time
 from datetime import timedelta
 from email.mime.image import MIMEImage
+from smtplib import SMTP, SMTPConnectError
+from types import MethodType
+from typing import TYPE_CHECKING, TypedDict
 
+import sentry_sdk
 from celery.schedules import crontab
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives, get_connection
+from django.core.mail.backends.smtp import EmailBackend as DjangoSMTPEmailBackend
 from django.utils.timezone import now
-from html2text import HTML2Text
 from social_django.models import Code, Partial
 
 from weblate.utils.celery import app
 from weblate.utils.errors import report_error
+from weblate.utils.html import HTML2Text
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from weblate.accounts.notifications import Notification
+
+LOGGER = logging.getLogger("weblate.smtp")
+
+
+class OutgoingEmail(TypedDict):
+    address: str
+    subject: str
+    body: str
+    headers: dict[str, str]
 
 
 @app.task(trail=False)
-def cleanup_social_auth():
+def cleanup_social_auth() -> None:
     """Cleanup expired partial social authentications."""
-    for partial in Partial.objects.iterator():
-        kwargs = partial.data["kwargs"]
-        if (
-            "weblate_expires" not in kwargs
-            or kwargs["weblate_expires"] < time.monotonic()
-        ):
-            # Old entry without expiry set, or expired entry
-            partial.delete()
-
     age = now() - timedelta(seconds=settings.AUTH_TOKEN_VALID)
     # Delete old not verified codes
     Code.objects.filter(verified=False, timestamp__lt=age).delete()
@@ -55,35 +51,76 @@ def cleanup_social_auth():
 
 
 @app.task(trail=False)
-def cleanup_auditlog():
+def cleanup_auditlog() -> None:
     """Cleanup old auditlog entries."""
     from weblate.accounts.models import AuditLog
 
+    timestamp = now()
+
+    # Cleanup old entries
     AuditLog.objects.filter(
-        timestamp__lt=now() - timedelta(days=settings.AUDITLOG_EXPIRY)
+        timestamp__lt=timestamp - timedelta(days=settings.AUDITLOG_EXPIRY)
     ).delete()
+
+    # Finalize pending two-factor entries, these happen due to
+    # WebAuthn keys being added in two stages. Mature entries older than 5 minutes
+    # but look only two hours into past for performance reasons
+    for audit in AuditLog.objects.filter(
+        timestamp__range=(
+            timestamp - timedelta(hours=2),
+            timestamp - timedelta(minutes=5),
+        ),
+        activity="twofactor-add",
+    ):
+        if "skip_notify" in audit.params:
+            del audit.params["skip_notify"]
+            audit.save(update_fields=["params"])
+
+
+class NotificationFactory:
+    def __init__(self):
+        self.perm_cache: dict[int, set[int]] = {}
+        self.outgoing: list[OutgoingEmail] = []
+        self.instances: dict[str, Notification] = {}
+
+    def for_action(self, action: int) -> Generator[Notification]:
+        from weblate.accounts.notifications import NOTIFICATIONS_ACTIONS
+
+        if action not in NOTIFICATIONS_ACTIONS:
+            return
+        for notification_cls in NOTIFICATIONS_ACTIONS[action]:
+            name = notification_cls.get_name()
+            try:
+                yield self.instances[name]
+            except KeyError:
+                result = self.instances[name] = notification_cls(
+                    self.outgoing, self.perm_cache
+                )
+                yield result
+
+    def send_queued(self) -> None:
+        if self.outgoing:
+            send_mails.delay(self.outgoing)
+            self.outgoing.clear()
 
 
 @app.task(trail=False)
-def notify_change(change_id):
-    from weblate.accounts.notifications import NOTIFICATIONS_ACTIONS
+def notify_changes(change_ids: list[int]) -> None:
     from weblate.trans.models import Change
 
-    change = Change.objects.get(pk=change_id)
-    perm_cache = {}
-    if change.action in NOTIFICATIONS_ACTIONS:
-        outgoing = []
-        for notification_cls in NOTIFICATIONS_ACTIONS[change.action]:
-            notification = notification_cls(outgoing, perm_cache)
+    changes = Change.objects.prefetch_for_get().filter(pk__in=change_ids)
+    factory = NotificationFactory()
+
+    for change in changes:
+        for notification in factory.for_action(change.action):
             notification.notify_immediate(change)
-        if outgoing:
-            send_mails.delay(outgoing)
+        factory.send_queued()
 
 
-def notify_digest(method):
+def notify_digest(method) -> None:
     from weblate.accounts.notifications import NOTIFICATIONS
 
-    outgoing = []
+    outgoing: list[OutgoingEmail] = []
     for notification_cls in NOTIFICATIONS:
         notification = notification_cls(outgoing)
         getattr(notification, method)()
@@ -92,28 +129,28 @@ def notify_digest(method):
 
 
 @app.task(trail=False)
-def notify_daily():
+def notify_daily() -> None:
     notify_digest("notify_daily")
 
 
 @app.task(trail=False)
-def notify_weekly():
+def notify_weekly() -> None:
     notify_digest("notify_weekly")
 
 
 @app.task(trail=False)
-def notify_monthly():
+def notify_monthly() -> None:
     notify_digest("notify_monthly")
 
 
 @app.task(trail=False)
-def notify_auditlog(log_id, email):
+def notify_auditlog(log_id, email) -> None:
     from weblate.accounts.models import AuditLog
     from weblate.accounts.notifications import send_notification_email
 
     audit = AuditLog.objects.get(pk=log_id)
     send_notification_email(
-        audit.user.profile.language,
+        audit.user.profile.language if audit.user else "en",
         [email],
         "account_activity",
         context={
@@ -126,36 +163,70 @@ def notify_auditlog(log_id, email):
     )
 
 
-@app.task(trail=False)
-def send_mails(mails):
+SMTP_DATA_PATCH = "_weblate_patched_data"
+
+
+def weblate_logging_smtp_data(self, msg):
+    (code, msg) = getattr(self, SMTP_DATA_PATCH)(msg)
+    if code == 250:
+        LOGGER.debug("SMTP completed (%s): %s", code, msg.decode())
+    else:
+        LOGGER.error("SMTP failed (%s): %s", code, msg.decode())
+    return (code, msg)
+
+
+def monkey_patch_smtp_logging(connection):
+    if isinstance(connection, DjangoSMTPEmailBackend):
+        # Ensure the connection is open
+        connection.open()
+
+        # Monkey patch smtplib.SMTP or smtplib.SMTP_SSL
+        backend = connection.connection
+        if isinstance(backend, SMTP) and not hasattr(backend, SMTP_DATA_PATCH):
+            setattr(backend, SMTP_DATA_PATCH, backend.data)
+            backend.data = MethodType(weblate_logging_smtp_data, backend)  # type: ignore[method-assign]
+
+    return connection
+
+
+@app.task(
+    trail=False,
+    autoretry_for=(SMTPConnectError, OSError),
+    retry_backoff=600,
+    retry_backoff_max=3600,
+)
+def send_mails(mails: list[OutgoingEmail]) -> None:
     """Send multiple mails in single connection."""
     images = []
-    for name in ("email-logo.png", "email-logo-footer.png"):
-        filename = os.path.join(settings.STATIC_ROOT, name)
-        with open(filename, "rb") as handle:
-            image = MIMEImage(handle.read())
-        image.add_header("Content-ID", f"<{name}@cid.weblate.org>")
-        image.add_header("Content-Disposition", "inline", filename=name)
-        images.append(image)
+    with sentry_sdk.start_span(op="email.images"):
+        for name in ("email-logo.png", "email-logo-footer.png"):
+            filename = os.path.join(settings.STATIC_ROOT, name)
+            with open(filename, "rb") as handle:
+                image = MIMEImage(handle.read())
+            image.add_header("Content-ID", f"<{name}@cid.weblate.org>")
+            image.add_header("Content-Disposition", "inline", filename=name)
+            images.append(image)
 
-    connection = get_connection()
-    try:
-        connection.open()
-    except Exception:
-        report_error(cause="Failed to send notifications")
-        connection.close()
-        return
+    with sentry_sdk.start_span(op="email.connect"):
+        connection = get_connection()
+        try:
+            connection.open()
+        except Exception:
+            LOGGER.exception("Could not initialize e-mail backend")
+            report_error("Could not send notifications")
+            connection.close()
+            return
+        connection = monkey_patch_smtp_logging(connection)
 
-    html2text = HTML2Text(bodywidth=78)
-    html2text.unicode_snob = True
-    html2text.ignore_images = True
-    html2text.pad_tables = True
+    html2text = HTML2Text()
 
     try:
         for mail in mails:
+            with sentry_sdk.start_span(op="email.text"):
+                text = html2text.handle(mail["body"])
             email = EmailMultiAlternatives(
                 settings.EMAIL_SUBJECT_PREFIX + mail["subject"],
-                html2text.handle(mail["body"]),
+                text,
                 to=[mail["address"]],
                 headers=mail["headers"],
                 connection=connection,
@@ -164,20 +235,22 @@ def send_mails(mails):
             for image in images:
                 email.attach(image)
             email.attach_alternative(mail["body"], "text/html")
-            email.send()
+            with sentry_sdk.start_span(op="email.send"):
+                LOGGER.debug("sending e-mail to %s", mail["address"])
+                email.send()
     finally:
         connection.close()
 
 
 @app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
+def setup_periodic_tasks(sender, **kwargs) -> None:
     sender.add_periodic_task(3600, cleanup_social_auth.s(), name="social-auth-cleanup")
     sender.add_periodic_task(3600, cleanup_auditlog.s(), name="auditlog-cleanup")
     sender.add_periodic_task(
         crontab(hour=1, minute=0), notify_daily.s(), name="notify-daily"
     )
     sender.add_periodic_task(
-        crontab(hour=2, minute=0, day_of_week="monday"),
+        crontab(hour=2, minute=0, day_of_week="mon"),
         notify_weekly.s(),
         name="notify-weekly",
     )

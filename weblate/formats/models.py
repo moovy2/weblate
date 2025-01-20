@@ -1,32 +1,18 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
-
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 from appconf import AppConf
 from django.utils.functional import cached_property
 
 from weblate.utils.classloader import ClassLoader
 
+from .base import BaseExporter, TranslationFormat
+
 
 class ExporterLoader(ClassLoader):
-    def __init__(self):
-        super().__init__("WEBLATE_EXPORTERS", False)
+    def __init__(self) -> None:
+        super().__init__("WEBLATE_EXPORTERS", construct=False, base_class=BaseExporter)
 
     def list_exporters(self, translation):
         return [
@@ -47,8 +33,10 @@ EXPORTERS = ExporterLoader()
 
 
 class FileFormatLoader(ClassLoader):
-    def __init__(self):
-        super().__init__("WEBLATE_FORMATS", False)
+    def __init__(self) -> None:
+        super().__init__(
+            "WEBLATE_FORMATS", construct=False, base_class=TranslationFormat
+        )
         self.errors = {}
 
     @cached_property
@@ -66,17 +54,6 @@ class FileFormatLoader(ClassLoader):
             result.append("weblate.formats.ttkit.TBXFormat")
         return result
 
-    def load_data(self):
-        result = super().load_data()
-        for fileformat in list(result.values()):
-            try:
-                fileformat.get_class()
-            except (AttributeError, ImportError) as error:
-                result.pop(fileformat.format_id)
-                self.errors[fileformat.format_id] = str(error)
-
-        return result
-
 
 FILE_FORMATS = FileFormatLoader()
 
@@ -92,6 +69,7 @@ class FormatsConf(AppConf):
         "weblate.formats.exporters.CSVExporter",
         "weblate.formats.exporters.XlsxExporter",
         "weblate.formats.exporters.JSONExporter",
+        "weblate.formats.exporters.JSONNestedExporter",
         "weblate.formats.exporters.AndroidResourceExporter",
         "weblate.formats.exporters.StringsExporter",
     )
@@ -110,16 +88,22 @@ class FormatsConf(AppConf):
         "weblate.formats.ttkit.PropertiesFormat",
         "weblate.formats.ttkit.JoomlaFormat",
         "weblate.formats.ttkit.GWTFormat",
+        "weblate.formats.ttkit.GWTISOFormat",
         "weblate.formats.ttkit.PhpFormat",
         "weblate.formats.ttkit.LaravelPhpFormat",
         "weblate.formats.ttkit.RESXFormat",
         "weblate.formats.ttkit.AndroidFormat",
+        "weblate.formats.ttkit.MOKOFormat",
         "weblate.formats.ttkit.JSONFormat",
         "weblate.formats.ttkit.JSONNestedFormat",
         "weblate.formats.ttkit.WebExtensionJSONFormat",
         "weblate.formats.ttkit.I18NextFormat",
+        "weblate.formats.ttkit.I18NextV4Format",
         "weblate.formats.ttkit.GoI18JSONFormat",
+        "weblate.formats.ttkit.GoI18V2JSONFormat",
+        "weblate.formats.ttkit.GoTextFormat",
         "weblate.formats.ttkit.ARBFormat",
+        "weblate.formats.ttkit.FormatJSFormat",
         "weblate.formats.ttkit.CSVFormat",
         "weblate.formats.ttkit.CSVUtf8Format",
         "weblate.formats.ttkit.CSVSimpleFormat",
@@ -144,6 +128,7 @@ class FormatsConf(AppConf):
         "weblate.formats.convert.OpenDocumentFormat",
         "weblate.formats.convert.PlainTextFormat",
         "weblate.formats.convert.DokuWikiFormat",
+        "weblate.formats.convert.MarkdownFormat",
         "weblate.formats.convert.MediaWikiFormat",
         "weblate.formats.convert.WindowsRCFormat",
         "weblate.formats.ttkit.XWikiPropertiesFormat",

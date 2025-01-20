@@ -10,6 +10,9 @@ Starting with the codebase
 Familiarize yourself with the Weblate codebase, by having a go at the
 bugs labelled `good first issue <https://github.com/WeblateOrg/weblate/labels/good%20first%20issue>`_.
 
+You are welcome to start working on these issues without asking. Just announce
+that in the issue, so that it's clear that somebody is working on that issue.
+
 Running Weblate locally
 -----------------------
 
@@ -28,39 +31,33 @@ sources.
 
    .. code-block:: sh
 
-      virtualenv .venv
-      .venv/bin/activate
+      uv venv .venv
+      source .venv/bin/activate
 
-3. Install Weblate (for this you need some system dependencies, see :doc:`../admin/install/source`):
-
-   .. code-block:: sh
-
-      pip install -e .
-
-3. Install all dependencies useful for development:
+3. Install Weblate (for this you need some system dependencies, see :doc:`../admin/install/source`) and all dependencies useful for development:
 
    .. code-block:: sh
 
-      pip install -r requirements-dev.txt
+      uv pip install -e '.[dev]'
 
-4. Start a development server:
+3. Start a development server:
 
    .. code-block:: sh
 
       weblate runserver
 
-5. Depending on your configuration, you might also want to start Celery workers:
+4. Depending on your configuration, you might also want to start Celery workers:
 
    .. code-block:: sh
 
       ./weblate/examples/celery start
 
-6. To run a test (see :ref:`local-tests` for more details):
+5. To run a test (see :ref:`local-tests` for more details):
 
    .. code-block:: sh
 
-      . scripts/test-database
-      ./manage.py test
+      . scripts/test-database.sh
+      pytest
 
 .. seealso::
 
@@ -71,8 +68,9 @@ sources.
 Running Weblate locally in Docker
 ---------------------------------
 
-If you have Docker and docker-compose installed, you can spin up the development
-environment by simply running:
+If you have Docker and the docker-compose-plugin installed, you need an additional tool
+called ``jq`` which you can install through your favorite package manager. Then, you can
+spin up the development environment by simply running:
 
 .. code-block:: sh
 
@@ -84,7 +82,8 @@ as the password. The new installation is empty, so you might want to continue wi
 :ref:`adding-projects`.
 
 The :file:`Dockerfile` and :file:`docker-compose.yml` for this are located in the
-:file:`dev-docker` directory.
+:file:`dev-docker` directory. For easier access to the database during development,
+the container running PostgreSQL is exposed on port ``5433``.
 
 The script also accepts some parameters, to execute tests, run it with the
 ``test`` parameter and then specify any :djadmin:`django:test` parameters,
@@ -92,7 +91,7 @@ for example running only tests in the ``weblate.machine`` module:
 
 .. code-block:: sh
 
-   ./rundev.sh test --failfast weblate.machine
+   ./rundev.sh test --exitfirst weblate/machine
 
 .. note::
 
@@ -113,10 +112,16 @@ To stop the background containers, run:
 
 Running the script without arguments will re-create the Docker container and restart it.
 
-.. note::
+.. warning::
 
-   This is not a suitable setup for production, as it includes several hacks which
-   are insecure, but they make development easier.
+   This container is not suitable for production use. Security is sacrificed to
+   make the development easier.
+
+Bootstrapping your devel instance
+---------------------------------
+
+You might want to use :wladmin:`import_demo` to create demo translations and
+:wladmin:`createadmin` to make an admin user.
 
 Coding Weblate with PyCharm
 ---------------------------
@@ -163,10 +168,3 @@ to debug it. This is done by creating a new `Django Server` configuration:
    the server from being reloaded live if you modify files. This allows the
    existing debugger breakpoints to persist, when they normally would be
    discarded upon reloading the server.
-
-
-Bootstrapping your devel instance
----------------------------------
-
-You might want to use :djadmin:`import_demo` to create demo translations and
-:djadmin:`createadmin` to make an admin user.

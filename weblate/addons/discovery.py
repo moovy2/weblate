@@ -1,37 +1,29 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
 
-from django.utils.functional import cached_property
-from django.utils.translation import gettext_lazy as _
+from typing import TYPE_CHECKING
+
+from django.utils.translation import gettext_lazy
 
 from weblate.addons.base import BaseAddon
-from weblate.addons.events import EVENT_POST_UPDATE
+from weblate.addons.events import AddonEvent
 from weblate.addons.forms import DiscoveryForm
 from weblate.trans.discovery import ComponentDiscovery
 
+if TYPE_CHECKING:
+    from weblate.auth.models import User
+
 
 class DiscoveryAddon(BaseAddon):
-    events = (EVENT_POST_UPDATE,)
+    events: set[AddonEvent] = {
+        AddonEvent.EVENT_POST_UPDATE,
+    }
     name = "weblate.discovery.discovery"
-    verbose = _("Component discovery")
-    description = _(
+    verbose = gettext_lazy("Component discovery")
+    description = gettext_lazy(
         "Automatically adds or removes project components based on file changes "
         "in the version control system."
     )
@@ -39,28 +31,29 @@ class DiscoveryAddon(BaseAddon):
     multiple = True
     icon = "magnify.svg"
     repo_scope = True
+    needs_component = True
     trigger_update = True
 
-    def post_update(self, component, previous_head: str, skip_push: bool):
-        self.discovery.perform(
+    def post_update(self, component, previous_head: str, skip_push: bool) -> None:
+        discovery = self.get_discovery(component)
+        discovery.perform(
             remove=self.instance.configuration.get("remove"), background=True
         )
 
-    def get_settings_form(self, user, **kwargs):
+    def get_settings_form(self, user: User | None, **kwargs):
         """Return configuration form for this addon."""
         if "data" not in kwargs:
             kwargs["data"] = self.instance.configuration
             kwargs["data"]["confirm"] = False
         return super().get_settings_form(user, **kwargs)
 
-    @cached_property
-    def discovery(self):
+    def get_discovery(self, component):
         # Handle old settings which did not have this set
         if "new_base_template" not in self.instance.configuration:
             self.instance.configuration["new_base_template"] = ""
         if "intermediate_template" not in self.instance.configuration:
             self.instance.configuration["intermediate_template"] = ""
         return ComponentDiscovery(
-            self.instance.component,
+            component,
             **ComponentDiscovery.extract_kwargs(self.instance.configuration),
         )

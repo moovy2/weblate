@@ -24,7 +24,7 @@ Web Console
 
 Copy the raw content from `template.yml
 <https://github.com/WeblateOrg/openshift/blob/main/template.yml>`_ and import
-them into your project, then use the ``Create`` button in the OpenShift web
+them into your project, then use the :guilabel:`Create` button in the OpenShift web
 console to create your application. The web console will prompt you for the
 values for all of the parameters used by the template.
 
@@ -90,7 +90,7 @@ Eliminate
    $ oc delete all -l app=<APPLICATION_NAME>
    $ oc delete configmap -l app= <APPLICATION_NAME>
    $ oc delete secret -l app=<APPLICATION_NAME>
-   # ATTTENTION! The following command is only optional and will permanently delete all of your data.
+   # ATTENTION! The following command is only optional and will permanently delete all of your data.
    $ oc delete pvc -l app=<APPLICATION_NAME>
 
    $ oc delete all -l app=weblate \

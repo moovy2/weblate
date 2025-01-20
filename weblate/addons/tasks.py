@@ -1,43 +1,35 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
 
 import os
-from typing import List
+from datetime import timedelta
 
-from django.db import Error as DjangoDatabaseError
-from django.db import transaction
-from django.db.models import Q
+from celery.schedules import crontab
+from django.conf import settings
+from django.db.models import F, Q
+from django.http import HttpRequest
+from django.utils import timezone
+from django.utils.timezone import now
 from lxml import html
 
-from weblate.addons.events import EVENT_DAILY
-from weblate.addons.models import Addon, handle_addon_error
+from weblate.addons.events import AddonEvent
+from weblate.addons.models import Addon, handle_addon_event
 from weblate.lang.models import Language
+from weblate.trans.exceptions import FileParseError
 from weblate.trans.models import Component, Project
 from weblate.utils.celery import app
 from weblate.utils.hash import calculate_checksum
+from weblate.utils.lock import WeblateLockTimeoutError
 from weblate.utils.requests import request
 
 IGNORED_TAGS = {"script", "style"}
 
 
 @app.task(trail=False)
-def cdn_parse_html(files: str, selector: str, component_id: int):
+def cdn_parse_html(files: str, selector: str, component_id: int) -> None:
     component = Component.objects.get(pk=component_id)
     source_translation = component.source_translation
     source_units = set(source_translation.unit_set.values_list("source", flat=True))
@@ -47,7 +39,7 @@ def cdn_parse_html(files: str, selector: str, component_id: int):
     for filename in files.splitlines():
         filename = filename.strip()
         try:
-            if filename.startswith("http://") or filename.startswith("https://"):
+            if filename.startswith(("http://", "https://")):
                 with request("get", filename) as handle:
                     content = handle.text
             else:
@@ -82,10 +74,20 @@ def cdn_parse_html(files: str, selector: str, component_id: int):
         component.delete_alert("CDNAddonError")
 
 
-@app.task(trail=False)
-def language_consistency(project_id: int, language_ids: List[int]):
+@app.task(
+    trail=False,
+    autoretry_for=(WeblateLockTimeoutError,),
+    retry_backoff=600,
+    retry_backoff_max=3600,
+)
+def language_consistency(
+    addon_id: int, language_ids: list[int], project_id: int
+) -> None:
+    addon = Addon.objects.get(pk=addon_id)
     project = Project.objects.get(pk=project_id)
     languages = Language.objects.filter(id__in=language_ids)
+    request = HttpRequest()
+    request.user = addon.addon.user
 
     for component in project.component_set.iterator():
         missing = languages.exclude(
@@ -95,30 +97,69 @@ def language_consistency(project_id: int, language_ids: List[int]):
             continue
         component.commit_pending("language consistency", None)
         for language in missing:
-            component.add_new_language(
+            new_lang = component.add_new_language(
                 language,
-                None,
+                request,
                 send_signal=False,
                 create_translations=False,
             )
-        component.create_translations()
+            if new_lang is None:
+                component.log_warning(
+                    "could not add %s language for language consistency: %s",
+                    language,
+                    component.new_lang_error_message,
+                )
+            else:
+                new_lang.log_info("added for language consistency")
+        try:
+            component.create_translations_task()
+        except FileParseError as error:
+            component.log_error("could not parse translation files: %s", error)
 
 
 @app.task(trail=False)
-def daily_addons():
-    for addon in Addon.objects.filter(event__event=EVENT_DAILY).prefetch_related(
-        "component"
-    ):
-        with transaction.atomic():
-            addon.component.log_debug("running daily add-on: %s", addon.name)
-            try:
-                addon.addon.daily(addon.component)
-            except DjangoDatabaseError:
-                raise
-            except Exception:
-                handle_addon_error(addon, addon.component)
+def daily_addons(modulo: bool = True) -> None:
+    def daily_callback(addon: Addon, component: Component) -> None:
+        addon.addon.daily(component)
+
+    today = timezone.now()
+    addons = Addon.objects.filter(event__event=AddonEvent.EVENT_DAILY)
+    if modulo:
+        addons = addons.annotate(hourmod=F("id") % 24).filter(hourmod=today.hour)
+    handle_addon_event(
+        AddonEvent.EVENT_DAILY,
+        daily_callback,
+        addon_queryset=addons,
+        auto_scope=True,
+    )
+
+
+@app.task(trail=False)
+def cleanup_addon_activity_log() -> None:
+    """Cleanup old add-on activity log entries."""
+    from weblate.addons.models import AddonActivityLog
+
+    AddonActivityLog.objects.filter(
+        created__lt=now() - timedelta(days=settings.ADDON_ACTIVITY_LOG_EXPIRY)
+    ).delete()
+
+
+@app.task(
+    trail=False,
+    autoretry_for=(WeblateLockTimeoutError,),
+    retry_backoff=60,
+)
+def postconfigure_addon(addon_id: int, addon=None) -> None:
+    if addon is None:
+        addon = Addon.objects.get(pk=addon_id)
+    addon.addon.post_configure_run()
 
 
 @app.on_after_finalize.connect
-def setup_periodic_tasks(sender, **kwargs):
-    sender.add_periodic_task(3600 * 24, daily_addons.s(), name="daily-addons")
+def setup_periodic_tasks(sender, **kwargs) -> None:
+    sender.add_periodic_task(crontab(minute=45), daily_addons.s(), name="daily-addons")
+    sender.add_periodic_task(
+        crontab(hour=0, minute=40),  # Not to run on minute 0 to spread the load
+        cleanup_addon_activity_log.s(),
+        name="cleanup-addon-activity-log",
+    )

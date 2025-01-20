@@ -1,21 +1,6 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 """Announcement model."""
 
@@ -23,13 +8,12 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
-from django.utils.translation import gettext as _
-from django.utils.translation import gettext_lazy
+from django.utils.translation import gettext, gettext_lazy
 
 from weblate.lang.models import Language
 
 
-class AnnouncementManager(models.Manager):
+class AnnouncementManager(models.Manager["Announcement"]):
     def context_filter(self, project=None, component=None, language=None):
         """Filter announcements by context."""
         base = self.filter(
@@ -67,7 +51,9 @@ class AnnouncementManager(models.Manager):
         Change.objects.create(
             action=Change.ACTION_ANNOUNCEMENT,
             project=result.project,
+            category=result.category,
             component=result.component,
+            language=result.language,
             announcement=result,
             target=result.message,
             user=user,
@@ -86,14 +72,21 @@ class Announcement(models.Model):
         help_text=gettext_lazy("You can use Markdown and mention users by @username."),
     )
     project = models.ForeignKey(
-        "Project",
+        "trans.Project",
         verbose_name=gettext_lazy("Project"),
         null=True,
         blank=True,
         on_delete=models.deletion.CASCADE,
     )
+    category = models.ForeignKey(
+        "trans.Category",
+        verbose_name=gettext_lazy("Category"),
+        null=True,
+        blank=True,
+        on_delete=models.deletion.CASCADE,
+    )
     component = models.ForeignKey(
-        "Component",
+        "trans.Component",
         verbose_name=gettext_lazy("Component"),
         null=True,
         blank=True,
@@ -106,10 +99,10 @@ class Announcement(models.Model):
         blank=True,
         on_delete=models.deletion.CASCADE,
     )
-    category = models.CharField(
+    severity = models.CharField(
         max_length=25,
-        verbose_name=gettext_lazy("Category"),
-        help_text=gettext_lazy("Category defines color used for the message."),
+        verbose_name=gettext_lazy("Severity"),
+        help_text=gettext_lazy("Severity defines color used for the message."),
         choices=(
             ("info", gettext_lazy("Info (light blue)")),
             ("warning", gettext_lazy("Warning (yellow)")),
@@ -131,8 +124,9 @@ class Announcement(models.Model):
     )
     notify = models.BooleanField(
         blank=True,
-        default=True,
+        default=False,
         verbose_name=gettext_lazy("Notify users"),
+        help_text=gettext_lazy("Send notification to subscribed users."),
     )
 
     objects = AnnouncementManager.from_queryset(AnnouncementQuerySet)()
@@ -142,11 +136,11 @@ class Announcement(models.Model):
         verbose_name = "Announcement"
         verbose_name_plural = "Announcements"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.message
 
-    def clean(self):
+    def clean(self) -> None:
         if self.project and self.component and self.component.project != self.project:
-            raise ValidationError(_("Do not specify both component and project!"))
+            raise ValidationError(gettext("Do not specify both component and project!"))
         if not self.project and self.component:
             self.project = self.component.project

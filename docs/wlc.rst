@@ -9,20 +9,19 @@ Weblate Client
 
 .. program:: wlc
 
-.. versionadded:: 2.7
-
-    There has been full wlc utility support ever since Weblate 2.7. If you are using an older version
-    some incompatibilities with the API might occur.
-
 Installation
 ++++++++++++
 
 The Weblate Client is shipped separately and includes the Python module.
-To use the commands below, you need to install :mod:`wlc`:
+To use the commands below, you need to install :program:`wlc` using pip:
 
 .. code-block:: sh
 
     pip install wlc
+
+.. hint::
+
+   You can also use this :program:`wlc` as a Python module, see :mod:`wlc`.
 
 .. _docker-wlc:
 
@@ -67,7 +66,7 @@ volume:
 Getting started
 +++++++++++++++
 
-The wlc configuration is stored in ``~/.config/weblate`` (see :ref:`wlc-config`
+The :program:`wlc` configuration is stored in :file:`~/.config/weblate` (see :ref:`wlc-config`
 for other locations), please create it to match your environment:
 
 .. code-block:: ini
@@ -296,23 +295,22 @@ Configuration files
 +++++++++++++++++++
 
 :file:`.weblate`, :file:`.weblate.ini`, :file:`weblate.ini`
-    .. versionchanged:: 1.6
-
-        The files with `.ini` extension are accepted as well.
-
-    Per project configuration file
-:file:`C:\\Users\\NAME\\AppData\\weblate.ini`
-    .. versionadded:: 1.6
-
-    User configuration file on Windows.
+    Configuration file placed in the project directory.
+:file:`C:\\Users\\NAME\\AppData\\Roaming\\weblate.ini`
+    User configuration file on Windows in the roamed profile.
+:file:`C:\\Users\\NAME\\AppData\\Local\\weblate.ini`
+    User configuration file on Windows in the local profile.
 :file:`~/.config/weblate`
-    User configuration file
+    User configuration file.
 :file:`/etc/xdg/weblate`
-    System wide configuration file
+    System wide configuration file.
 
-The program follows the XDG specification, so you can adjust placement of config files
-by environment variables ``XDG_CONFIG_HOME`` or ``XDG_CONFIG_DIRS``. On Windows
-``APPDATA`` directory is preferred location for the configuration file.
+The program follows the XDG specification, so you can adjust the placement of
+config files by environment variables ``XDG_CONFIG_HOME`` or
+``XDG_CONFIG_DIRS``.
+
+On Windows ``APPDATA`` and ``LOCALAPPDATA`` directories are the preferred
+locations for the configuration file.
 
 Following settings can be configured in the ``[weblate]`` section (you can
 customize this by :option:`--config-section`):
@@ -346,7 +344,7 @@ Additionally API keys can be stored in the ``[keys]`` section:
     https://hosted.weblate.org/api/ = APIKEY
 
 This allows you to store keys in your personal settings, while using the
-:file:`.weblate` configuration in the VCS repository so that wlc knows which
+:file:`.weblate` configuration in the VCS repository so that :program:`wlc` knows which
 server it should talk to.
 
 Examples
@@ -376,7 +374,7 @@ Upload translation file:
 
    $ wlc upload project/component/language --input /tmp/hello.po
 
-You can also designate what project wlc should work on:
+You can also designate what project :program:`wlc` should work on:
 
 .. code-block:: sh
 

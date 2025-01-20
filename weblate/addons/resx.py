@@ -1,33 +1,26 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
-from django.utils.functional import cached_property
-from django.utils.translation import gettext_lazy as _
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from django.utils.translation import gettext_lazy
 from translate.storage.resx import RESXFile
 
 from weblate.addons.cleanup import BaseCleanupAddon
 
+if TYPE_CHECKING:
+    from weblate.trans.models import Component, Translation, Unit
+
+    IndexType = dict[int, Unit]
+
 
 class ResxUpdateAddon(BaseCleanupAddon):
     name = "weblate.resx.update"
-    verbose = _("Update RESX files")
-    description = _(
+    verbose = gettext_lazy("Update RESX files")
+    description = gettext_lazy(
         "Update all translation files to match the monolingual upstream base file. "
         "Unused strings are removed, and new ones added as copies of the source "
         "string."
@@ -35,37 +28,29 @@ class ResxUpdateAddon(BaseCleanupAddon):
     icon = "refresh.svg"
     compat = {"file_format": {"resx"}}
 
-    @cached_property
-    def template_store(self):
-        return self.instance.component.template_store.store
-
     @staticmethod
-    def build_index(storage):
-        index = {}
+    def build_index(storage) -> IndexType:
+        return {unit.getid(): unit for unit in storage.units}
 
-        for unit in storage.units:
-            index[unit.getid()] = unit
-
-        return index
-
-    def build_indexes(self):
-        index = self.build_index(self.template_store)
-        if self.instance.component.intermediate:
-            intermediate = self.build_index(
-                self.instance.component.intermediate_store.store
-            )
+    def build_indexes(self, component: Component):
+        index = self.build_index(component.template_store.store)
+        if component.intermediate:
+            intermediate = self.build_index(component.intermediate_store.store)
         else:
             intermediate = {}
         return index, intermediate
 
     @staticmethod
-    def get_index(index, intermediate, translation):
+    def get_index(index: IndexType, intermediate: IndexType, translation: Translation):
         if intermediate and translation.is_source:
             return intermediate
         return index
 
-    def update_resx(self, index, translation, storage, changes):
-        """Filter obsolete units in RESX storage.
+    def update_resx(
+        self, index: IndexType, translation: Translation, storage, changes: set[int]
+    ) -> None:
+        """
+        Filter obsolete units in RESX storage.
 
         This removes the corresponding XML element and also adds newly added, and
         changed units.
@@ -74,7 +59,7 @@ class ResxUpdateAddon(BaseCleanupAddon):
         changed = False
 
         # Add missing units
-        for unit in self.template_store.units:
+        for unit in translation.component.template_store.store.units:
             if unit.getid() not in sindex:
                 storage.store.addunit(unit, True)
                 changed = True
@@ -93,7 +78,7 @@ class ResxUpdateAddon(BaseCleanupAddon):
             storage.save()
 
     @staticmethod
-    def find_changes(index, storage):
+    def find_changes(index: IndexType, storage) -> set[int]:
         """Find changed string IDs in upstream repository."""
         result = set()
 
@@ -106,8 +91,8 @@ class ResxUpdateAddon(BaseCleanupAddon):
 
         return result
 
-    def update_translations(self, component, previous_head):
-        index, intermediate = self.build_indexes()
+    def update_translations(self, component: Component, previous_head: str) -> None:
+        index, intermediate = self.build_indexes(component)
 
         if previous_head:
             content = component.repository.get_file(component.template, previous_head)

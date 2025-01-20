@@ -1,43 +1,41 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
-import user_agents
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from weblate.auth.models import AuthenticatedHttpRequest
 
 
-def get_request_meta(request, name: str):
-    """Returns request meta if request is set and meta available."""
-    if not request:
+def get_request_meta(request: AuthenticatedHttpRequest | None, name: str) -> str:
+    """Return request meta if request is set and meta available."""
+    if request is None:
         return ""
     return request.META.get(name, "")
 
 
-def get_ip_address(request):
+def get_ip_address(request: AuthenticatedHttpRequest | None) -> str:
     """Return IP address for request."""
     return get_request_meta(request, "REMOTE_ADDR")
 
 
-def get_user_agent_raw(request):
+def get_user_agent_raw(request: AuthenticatedHttpRequest) -> str:
     """Return raw user agent string."""
     return get_request_meta(request, "HTTP_USER_AGENT")
 
 
-def get_user_agent(request, max_length: int = 200):
+def get_user_agent(
+    request: AuthenticatedHttpRequest | None, max_length: int = 200
+) -> str:
     """Return formatted user agent for request."""
-    uaobj = user_agents.parse(get_user_agent_raw(request))
+    raw = get_user_agent_raw(request)
+    if not raw:
+        return ""
+
+    # Lazily import as this is expensive
+    import user_agents
+
+    uaobj = user_agents.parse(raw)
     return str(uaobj)[:max_length]

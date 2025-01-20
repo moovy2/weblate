@@ -1,19 +1,14 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the PACKAGE package.
-# THANOS SIOURDAKIS <siourdakisthanos@gmail.com>, 2019.
-# george k <norhorn@gmail.com>, 2020.
-# Anonymous <noreply@weblate.org>, 2020.
-# Michalis <michalisntovas@yahoo.gr>, 2021.
-# Eugenia Russell <eugenia.russell2019@gmail.com>, 2021.
-# george kitsoukakis <norhorn@gmail.com>, 2021.
+# Copyright © Michal Čihař <michal@weblate.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Michalis <michalisntovas@yahoo.gr>, 2023.
 msgid ""
 msgstr ""
-"Project-Id-Version: Weblate 4.14.1\n"
+"Project-Id-Version: Weblate 5.10\n"
 "Report-Msgid-Bugs-To: https://github.com/WeblateOrg/weblate/issues\n"
-"POT-Creation-Date: 2022-08-26 06:38+0000\n"
-"PO-Revision-Date: 2021-12-23 11:12+0000\n"
-"Last-Translator: george kitsoukakis <norhorn@gmail.com>\n"
+"POT-Creation-Date: 2025-01-17 12:44+0000\n"
+"PO-Revision-Date: 2023-12-31 09:01+0000\n"
+"Last-Translator: Michalis <michalisntovas@yahoo.gr>\n"
 "Language-Team: Greek <https://hosted.weblate.org/projects/weblate/javascript/"
 "el/>\n"
 "Language: el\n"
@@ -21,326 +16,310 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=n != 1;\n"
-"X-Generator: Weblate 4.10.1\n"
+"X-Generator: Weblate 5.4-dev\n"
 
-#: weblate/static/editor/base.js:90
+#: weblate/static/editor/base.js:91
 msgid "Please select target plural by clicking."
 msgstr "Παρακαλώ επιλέξτε τον πληθυντικό στόχο κάνοντας κλικ."
 
-#: weblate/static/editor/base.js:170
+#: weblate/static/editor/base.js:145
+#, fuzzy
+#| msgid "There are some unsaved changes, are you sure you want to leave?"
+msgid "You have unsaved changes. Are you sure you want to skip?"
+msgstr "Υπάρχουν ορισμένες μη αποθηκευμένες αλλαγές, θέλετε σίγουρα να φύγετε;"
+
+#: weblate/static/editor/base.js:180
 #, javascript-format
 msgid "Cmd+%s"
 msgstr "Cmd+%s"
 
-#: weblate/static/editor/base.js:172
+#: weblate/static/editor/base.js:182
 #, javascript-format
 msgid "Ctrl+%s"
 msgstr "Ctrl+%s"
 
-#: weblate/static/editor/full.js:238
+#: weblate/static/editor/full.js:260
+msgid "Translation memory entry removed."
+msgstr "Αφαίρεση εγγραφής στη μεταφραστική μνήμη."
+
+#: weblate/static/editor/full.js:294
 msgid "The request for machine translation has failed:"
 msgstr "Το αίτημα για μηχανική μετάφραση απέτυχε:"
 
-#: weblate/static/editor/full.js:251
+#: weblate/static/editor/full.js:304
 #, javascript-format
 msgid "The request for machine translation using %s has failed:"
 msgstr "Το αίτημα για μηχανική μετάφραση με χρήση της %s απέτυχε:"
 
-#: weblate/static/editor/full.js:285
+#: weblate/static/editor/full.js:339
 #, javascript-format
 msgid "Cmd+M then %s"
 msgstr "Cmd+M μετά %s"
 
-#: weblate/static/editor/full.js:287
+#: weblate/static/editor/full.js:341
 #, javascript-format
 msgid "Ctrl+M then %s"
 msgstr "Ctrl+M μετά %s"
 
-#: weblate/static/editor/full.js:389
+#: weblate/static/editor/full.js:443
 #, javascript-format
 msgid "Press Cmd+I then %s to dismiss this."
 msgstr "Για απόρριψη πιέστε Cmd+I και %s."
 
-#: weblate/static/editor/full.js:394
+#: weblate/static/editor/full.js:448
 #, javascript-format
 msgid "Press Ctrl+I then %s to dismiss this."
 msgstr "Για απόρριψη πιέστε Ctrl+I και %s."
 
-#: weblate/static/editor/full.js:532
-msgid "Copy"
-msgstr "Αντιγραφή"
+#: weblate/static/editor/full.js:592
+msgid "Clone to translation"
+msgstr "Κλωνοποίηση στη μετάφραση"
 
-#: weblate/static/editor/full.js:538
-msgid "Copy and save"
-msgstr "Αντιγραφή και αποθήκευση"
+#: weblate/static/editor/full.js:594
+msgid "Accept"
+msgstr "Αποδοχή"
 
-#: weblate/static/editor/zen.js:101
+#: weblate/static/editor/full.js:603
+msgid "Delete entry"
+msgstr "Διαγραφή καταχώρησης"
+
+#: weblate/static/editor/tools/search.js:49
+msgid "No results found"
+msgstr ""
+
+#: weblate/static/editor/tools/search.js:102
+#, javascript-format
+msgid "%s matching string"
+msgid_plural "%s matching strings"
+msgstr[0] ""
+msgstr[1] ""
+
+#: weblate/static/editor/zen.js:114
 msgid "There are some unsaved changes, are you sure you want to leave?"
 msgstr "Υπάρχουν ορισμένες μη αποθηκευμένες αλλαγές, θέλετε σίγουρα να φύγετε;"
 
-#: weblate/static/loader-bootstrap.js:155
+#: weblate/static/js/screenshots/clipboard-paste.js:38
+msgid "Image Pasted!"
+msgstr ""
+
+#: weblate/static/js/screenshots/clipboard-paste.js:40
+#: weblate/static/js/screenshots/clipboard-paste.js:56
+msgid "Something went wrong!"
+msgstr ""
+
+#: weblate/static/js/screenshots/clipboard-paste.js:53
+msgid "No image found in clipboard"
+msgstr ""
+
+#: weblate/static/loader-bootstrap.js:171
 msgid "Error loading search results!"
 msgstr "Σφάλμα φόρτωσης αποτελεσμάτων αναζήτησης!"
 
-#: weblate/static/loader-bootstrap.js:159
+#: weblate/static/loader-bootstrap.js:175
 msgid "No new matching source strings found."
 msgstr "Κανένα νέο κείμενο προέλευσης που να ταιριάζει δεν βρέθηκε."
 
-#: weblate/static/loader-bootstrap.js:229
+#: weblate/static/loader-bootstrap.js:259
 msgid "Sort this column"
 msgstr "Ταξινόμηση αυτής της στήλης"
 
-#: weblate/static/loader-bootstrap.js:468
+#: weblate/static/loader-bootstrap.js:576
 msgid "Error while loading page:"
 msgstr "Σφάλμα κατά τη φόρτωση της σελίδας:"
 
-#: weblate/static/loader-bootstrap.js:626
-#: weblate/static/loader-bootstrap.js:633
-msgid "Sunday"
-msgstr "Κυριακή"
+#: weblate/static/loader-bootstrap.js:849
+msgid "Text copied to clipboard."
+msgstr "Το κείμενο αντιγράφηκε στο πρόχειρο."
 
-#: weblate/static/loader-bootstrap.js:627
-msgid "Monday"
-msgstr "Δευτέρα"
+#: weblate/static/loader-bootstrap.js:853
+msgid "Please press Ctrl+C to copy."
+msgstr "Πατήστε Ctrl + C για αντιγραφή."
 
-#: weblate/static/loader-bootstrap.js:628
-msgid "Tuesday"
-msgstr "Τρίτη"
+#: weblate/static/loader-bootstrap.js:878
+msgid "Search…"
+msgstr "Αναζήτηση…"
 
-#: weblate/static/loader-bootstrap.js:629
-msgid "Wednesday"
-msgstr "Τετάρτη"
+#: weblate/static/loader-bootstrap.js:880
+msgid "Available:"
+msgstr "Διαθέσιμο:"
 
-#: weblate/static/loader-bootstrap.js:630
-msgid "Thursday"
-msgstr "Πέμπτη"
+#: weblate/static/loader-bootstrap.js:882
+msgid "Chosen:"
+msgstr "Επιλεγμένο:"
 
-#: weblate/static/loader-bootstrap.js:631
-msgid "Friday"
-msgstr "Παρασκευή"
+#: weblate/static/loader-bootstrap.js:1186
+msgid "Weblate is now scanning the repository, please be patient."
+msgstr "Το Weblate σαρώνει τώρα το αποθετήριο, παρακαλώ να είστε υπομονετικοί."
 
-#: weblate/static/loader-bootstrap.js:632
-msgid "Saturday"
-msgstr "Σάββατο"
+#: weblate/static/loader-bootstrap.js:1301
+msgid ""
+"Notification settings removed, please do not forget to save the changes."
+msgstr ""
+"Οι ρυθμίσεις ειδοποιήσεων καταργήθηκαν, μην ξεχάσετε να αποθηκεύσετε τις "
+"αλλαγές."
 
-#: weblate/static/loader-bootstrap.js:636
-#: weblate/static/loader-bootstrap.js:643
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Sun"
-msgstr "Κυρ"
+#: weblate/static/loader-bootstrap.js:1463
+msgid "Custom range"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:637
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Mon"
-msgstr "Δευ"
+#: weblate/static/loader-bootstrap.js:1464
+msgid "Clear"
+msgstr "Εκκαθάριση"
 
-#: weblate/static/loader-bootstrap.js:638
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Tue"
-msgstr "Τρί"
-
-#: weblate/static/loader-bootstrap.js:639
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Wed"
-msgstr "Τετ"
-
-#: weblate/static/loader-bootstrap.js:640
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Thu"
-msgstr "Πέμ"
-
-#: weblate/static/loader-bootstrap.js:641
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Fri"
-msgstr "Παρ"
-
-#: weblate/static/loader-bootstrap.js:642
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Sat"
-msgstr "Σάβ"
-
-#: weblate/static/loader-bootstrap.js:646
-#: weblate/static/loader-bootstrap.js:653
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1466
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Su"
+msgctxt "Short name of day"
 msgid "Su"
 msgstr "Κυ"
 
-#: weblate/static/loader-bootstrap.js:647
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1467
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Mo"
+msgctxt "Short name of day"
 msgid "Mo"
 msgstr "Δε"
 
-#: weblate/static/loader-bootstrap.js:648
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1468
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Tu"
+msgctxt "Short name of day"
 msgid "Tu"
 msgstr "Τρ"
 
-#: weblate/static/loader-bootstrap.js:649
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1469
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "We"
+msgctxt "Short name of day"
 msgid "We"
 msgstr "Τε"
 
-#: weblate/static/loader-bootstrap.js:650
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1470
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Th"
+msgctxt "Short name of day"
 msgid "Th"
 msgstr "Πέ"
 
-#: weblate/static/loader-bootstrap.js:651
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1471
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Fr"
+msgctxt "Short name of day"
 msgid "Fr"
 msgstr "Πα"
 
-#: weblate/static/loader-bootstrap.js:652
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1472
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Sa"
+msgctxt "Short name of day"
 msgid "Sa"
 msgstr "Σά"
 
-#: weblate/static/loader-bootstrap.js:656
-msgid "January"
-msgstr "Ιανουάριος"
-
-#: weblate/static/loader-bootstrap.js:657
-msgid "February"
-msgstr "Φεβρουάριος"
-
-#: weblate/static/loader-bootstrap.js:658
-msgid "March"
-msgstr "Μάρτιος"
-
-#: weblate/static/loader-bootstrap.js:659
-msgid "April"
-msgstr "Απρίλιος"
-
-#: weblate/static/loader-bootstrap.js:660
-msgid "May"
-msgstr "Μάιος"
-
-#: weblate/static/loader-bootstrap.js:661
-msgid "June"
-msgstr "Ιούνιος"
-
-#: weblate/static/loader-bootstrap.js:662
-msgid "July"
-msgstr "Ιούλιος"
-
-#: weblate/static/loader-bootstrap.js:663
-msgid "August"
-msgstr "Αύγουστος"
-
-#: weblate/static/loader-bootstrap.js:664
-msgid "September"
-msgstr "Σεπτέμβριος"
-
-#: weblate/static/loader-bootstrap.js:665
-msgid "October"
-msgstr "Οκτώβριος"
-
-#: weblate/static/loader-bootstrap.js:666
-msgid "November"
-msgstr "Νοέμβριος"
-
-#: weblate/static/loader-bootstrap.js:667
-msgid "December"
-msgstr "Δεκέμβριος"
-
-#: weblate/static/loader-bootstrap.js:670
+#: weblate/static/loader-bootstrap.js:1475
 msgctxt "Short name of month"
 msgid "Jan"
 msgstr "Ιαν"
 
-#: weblate/static/loader-bootstrap.js:671
+#: weblate/static/loader-bootstrap.js:1476
 msgctxt "Short name of month"
 msgid "Feb"
 msgstr "Φεβ"
 
-#: weblate/static/loader-bootstrap.js:672
+#: weblate/static/loader-bootstrap.js:1477
 msgctxt "Short name of month"
 msgid "Mar"
 msgstr "Μαρ"
 
-#: weblate/static/loader-bootstrap.js:673
+#: weblate/static/loader-bootstrap.js:1478
 msgctxt "Short name of month"
 msgid "Apr"
 msgstr "Απρ"
 
-#: weblate/static/loader-bootstrap.js:674
+#: weblate/static/loader-bootstrap.js:1479
 msgctxt "Short name of month"
 msgid "May"
 msgstr "Μάιος"
 
-#: weblate/static/loader-bootstrap.js:675
+#: weblate/static/loader-bootstrap.js:1480
 msgctxt "Short name of month"
 msgid "Jun"
 msgstr "Ιουν"
 
-#: weblate/static/loader-bootstrap.js:676
+#: weblate/static/loader-bootstrap.js:1481
 msgctxt "Short name of month"
 msgid "Jul"
 msgstr "Ιουλ"
 
-#: weblate/static/loader-bootstrap.js:677
+#: weblate/static/loader-bootstrap.js:1482
 msgctxt "Short name of month"
 msgid "Aug"
 msgstr "Αυγ"
 
-#: weblate/static/loader-bootstrap.js:678
+#: weblate/static/loader-bootstrap.js:1483
 msgctxt "Short name of month"
 msgid "Sep"
 msgstr "Σεπ"
 
-#: weblate/static/loader-bootstrap.js:679
+#: weblate/static/loader-bootstrap.js:1484
 msgctxt "Short name of month"
 msgid "Oct"
 msgstr "Οκτ"
 
-#: weblate/static/loader-bootstrap.js:680
+#: weblate/static/loader-bootstrap.js:1485
 msgctxt "Short name of month"
 msgid "Nov"
 msgstr "Νοε"
 
-#: weblate/static/loader-bootstrap.js:681
+#: weblate/static/loader-bootstrap.js:1486
 msgctxt "Short name of month"
 msgid "Dec"
 msgstr "Δεκ"
 
-#: weblate/static/loader-bootstrap.js:683
+#: weblate/static/loader-bootstrap.js:1490
 msgid "Today"
 msgstr "Σήμερα"
 
-#: weblate/static/loader-bootstrap.js:684
-msgid "Clear"
-msgstr "Εκκαθάριση"
+#: weblate/static/loader-bootstrap.js:1491
+msgid "Yesterday"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:813
-msgid "Text copied to clipboard."
-msgstr "Το κείμενο αντιγράφηκε στο πρόχειρο."
+#: weblate/static/loader-bootstrap.js:1495
+msgid "Last 7 days"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:817
-msgid "Please press Ctrl+C to copy."
-msgstr "Πατήστε Ctrl + C για αντιγραφή."
+#: weblate/static/loader-bootstrap.js:1496
+msgid "Last 30 days"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:841
-msgid "Search…"
-msgstr "Αναζήτηση…"
+#: weblate/static/loader-bootstrap.js:1497
+msgid "This month"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:842
-msgid "Available:"
-msgstr "Διαθέσιμο:"
+#: weblate/static/loader-bootstrap.js:1501
+msgid "Last month"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:843
-msgid "Chosen:"
-msgstr "Επιλεγμένο:"
+#: weblate/static/loader-bootstrap.js:1505
+msgid "This year"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:1104
-msgid "Weblate is now scanning the repository, please be patient."
-msgstr "Το Weblate σαρώνει τώρα το αποθετήριο, παρακαλώ να είστε υπομονετικοί."
+#: weblate/static/loader-bootstrap.js:1509
+msgid "Last year"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:1199
+#: weblate/static/loader-bootstrap.js:1591
 msgctxt "Alert to user when opening browser developer console"
 msgid "Stop!"
 msgstr "Διακοπή!"
 
-#: weblate/static/loader-bootstrap.js:1205
+#: weblate/static/loader-bootstrap.js:1598
 msgid ""
 "This is a browser feature intended for developers. If someone told you to "
 "copy-paste something here, they are likely trying to compromise your Weblate "
@@ -350,54 +329,136 @@ msgstr ""
 "κάνετε αντιγραφή -επικόλληση κάτι εδώ, πιθανότατα προσπαθεί να παραβιάσει το "
 "λογαριασμό σας στο Weblate."
 
-#: weblate/static/loader-bootstrap.js:1212
+#: weblate/static/loader-bootstrap.js:1605
 msgid "See https://en.wikipedia.org/wiki/Self-XSS for more information."
 msgstr ""
 "Για περισσότερες πληροφορίες δείτε https://en.wikipedia.org/wiki/Self-XSS."
 
-#: weblate/static/zammad.js:3
-msgid "Weblate feedback"
-msgstr "Σχόλια για το Weblate"
+#~ msgid "Weblate feedback"
+#~ msgstr "Σχόλια για το Weblate"
 
-#: weblate/static/zammad.js:4
-msgid "Get help"
-msgstr "Λήψη βοήθειας"
+#~ msgid "Get help"
+#~ msgstr "Λήψη βοήθειας"
 
-#: weblate/static/zammad.js:6
 #, javascript-format
-msgid ""
-"Thank you for your inquiry (#%s)! We'll contact you as soon as possible."
-msgstr ""
-"Σας ευχαριστούμε για το ερώτημά σας (#%s)! Θα επικοινωνήσουμε μαζί σας το "
-"συντομότερο δυνατό."
+#~ msgid ""
+#~ "Thank you for your inquiry (#%s)! We'll contact you as soon as possible."
+#~ msgstr ""
+#~ "Σας ευχαριστούμε για το ερώτημά σας (#%s)! Θα επικοινωνήσουμε μαζί σας το "
+#~ "συντομότερο δυνατό."
 
-#: weblate/static/zammad.js:13
-msgid "Subject"
-msgstr "Θέμα"
+#~ msgid "Subject"
+#~ msgstr "Θέμα"
 
-#: weblate/static/zammad.js:21
-msgid "Your name"
-msgstr "Το όνομά σας"
+#~ msgid "Your name"
+#~ msgstr "Το όνομά σας"
 
-#: weblate/static/zammad.js:29
-msgid "Your e-mail"
-msgstr "Η ηλεκτρονική σας διευθυνση"
+#~ msgid "Your e-mail"
+#~ msgstr "Η ηλεκτρονική σας διευθυνση"
 
-#: weblate/static/zammad.js:37
-msgid "Message"
-msgstr "Μήνυμα"
+#~ msgid "Message"
+#~ msgstr "Μήνυμα"
 
-#: weblate/static/zammad.js:41
-msgid ""
-"Please contact us in English, otherwise we might be unable to process your "
-"request."
-msgstr ""
-"Επικοινωνήστε μαζί μας στα Αγγλικά, διαφορετικά δεν θα μπορέσουμε να "
-"επεξεργαστούμε το αίτημά σας."
+#~ msgid ""
+#~ "Please contact us in English, otherwise we might be unable to process "
+#~ "your request."
+#~ msgstr ""
+#~ "Επικοινωνήστε μαζί μας στα Αγγλικά, διαφορετικά δεν θα μπορέσουμε να "
+#~ "επεξεργαστούμε το αίτημά σας."
 
-#: weblate/static/zammad.js:47
-msgid "Attachments"
-msgstr "Συνημμένα"
+#~ msgid "Attachments"
+#~ msgstr "Συνημμένα"
+
+#~ msgid "Sunday"
+#~ msgstr "Κυριακή"
+
+#~ msgid "Monday"
+#~ msgstr "Δευτέρα"
+
+#~ msgid "Tuesday"
+#~ msgstr "Τρίτη"
+
+#~ msgid "Wednesday"
+#~ msgstr "Τετάρτη"
+
+#~ msgid "Thursday"
+#~ msgstr "Πέμπτη"
+
+#~ msgid "Friday"
+#~ msgstr "Παρασκευή"
+
+#~ msgid "Saturday"
+#~ msgstr "Σάββατο"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Sun"
+#~ msgstr "Κυρ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Mon"
+#~ msgstr "Δευ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Tue"
+#~ msgstr "Τρί"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Wed"
+#~ msgstr "Τετ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Thu"
+#~ msgstr "Πέμ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Fri"
+#~ msgstr "Παρ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Sat"
+#~ msgstr "Σάβ"
+
+#~ msgid "January"
+#~ msgstr "Ιανουάριος"
+
+#~ msgid "February"
+#~ msgstr "Φεβρουάριος"
+
+#~ msgid "March"
+#~ msgstr "Μάρτιος"
+
+#~ msgid "April"
+#~ msgstr "Απρίλιος"
+
+#~ msgid "May"
+#~ msgstr "Μάιος"
+
+#~ msgid "June"
+#~ msgstr "Ιούνιος"
+
+#~ msgid "July"
+#~ msgstr "Ιούλιος"
+
+#~ msgid "August"
+#~ msgstr "Αύγουστος"
+
+#~ msgid "September"
+#~ msgstr "Σεπτέμβριος"
+
+#~ msgid "October"
+#~ msgstr "Οκτώβριος"
+
+#~ msgid "November"
+#~ msgstr "Νοέμβριος"
+
+#~ msgid "December"
+#~ msgstr "Δεκέμβριος"
+
+#~ msgid "Copy"
+#~ msgstr "Αντιγραφή"
+
+#~ msgid "Copy and save"
+#~ msgstr "Αντιγραφή και αποθήκευση"
 
 #~ msgid "Add to screenshot"
 #~ msgstr "Προσθήκη στο στιγμιότυπο"
@@ -455,9 +516,6 @@ msgstr "Συνημμένα"
 #~ msgid "Resetting the repository will throw away all local changes!"
 #~ msgstr ""
 #~ "Η επαναφορά του αποθετηρίου θα απομακρύνει όλες τις τοπικές αλλαγές!"
-
-#~ msgid "Failed translation"
-#~ msgstr "Αποτυχημένη μετάφραση"
 
 #~ msgid "Error details:"
 #~ msgstr "Λεπτομέρειες σφάλματος:"

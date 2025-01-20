@@ -1,5 +1,6 @@
 comment:
   layout: reach, changes, diff, files
+  require_changes: coverage_drop OR uncovered_patch
 coverage:
   ignore:
   - .*/settings_.*.py
@@ -7,9 +8,23 @@ coverage:
   - .*/wsgi.py
   status:
     project:
+      auth:
+        paths:
+        - weblate/auth
+        - weblate/accounts
+      formats:
+        paths:
+        - weblate/formats
+      checks:
+        paths:
+        - weblate/checks
       default:
         target: 90
+    patch:
+      default:
+        target: 100
 codecov:
+  branch: main
   notify:
     # Wait for reasonable amount of tests to complete before
     # reporting coverage

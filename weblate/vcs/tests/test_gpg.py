@@ -1,32 +1,16 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
 import subprocess
-from distutils.version import LooseVersion
-from unittest import SkipTest
 
 from django.core.cache import cache
 from django.test import TestCase
 from django.test.utils import override_settings
+from packaging.version import Version
 
 import weblate.vcs.gpg
-from weblate.utils.checks import check_data_writable
+from weblate.utils.apps import check_data_writable
 from weblate.utils.unittest import tempdir_setting
 from weblate.vcs.gpg import (
     generate_gpg_key,
@@ -40,7 +24,7 @@ class GPGTest(TestCase):
     gpg_error = None
 
     @classmethod
-    def setUpClass(cls):
+    def setUpClass(cls) -> None:
         """Check whether we can use gpg."""
         super().setUpClass()
         try:
@@ -51,24 +35,24 @@ class GPGTest(TestCase):
                 capture_output=True,
             )
             version = result.stdout.splitlines()[0].strip().rsplit(None, 1)[-1]
-            if LooseVersion(version) < LooseVersion("2.1"):
+            if Version(version) < Version("2.1"):
                 cls.gpg_error = "gpg too old"
         except (subprocess.CalledProcessError, OSError):
             cls.gpg_error = "gpg not found"
 
-    def setUp(self):
+    def setUp(self) -> None:
         if self.gpg_error:
-            raise SkipTest(self.gpg_error)
+            self.skipTest(self.gpg_error)
 
-    def check_errors(self):
+    def check_errors(self) -> None:
         self.assertEqual(weblate.vcs.gpg.GPG_ERRORS, {})
 
     @tempdir_setting("DATA_DIR")
     @override_settings(
         WEBLATE_GPG_IDENTITY="Weblate <weblate@example.com>", WEBLATE_GPG_ALGO="rsa512"
     )
-    def test_generate(self):
-        self.assertEqual(check_data_writable(), [])
+    def test_generate(self) -> None:
+        self.assertEqual(check_data_writable(app_configs=None, databases=None), [])
         self.assertIsNone(get_gpg_key(silent=True))
         key = generate_gpg_key()
         self.check_errors()
@@ -79,8 +63,8 @@ class GPGTest(TestCase):
     @override_settings(
         WEBLATE_GPG_IDENTITY="Weblate <weblate@example.com>", WEBLATE_GPG_ALGO="rsa512"
     )
-    def test_get(self):
-        self.assertEqual(check_data_writable(), [])
+    def test_get(self) -> None:
+        self.assertEqual(check_data_writable(app_configs=None, databases=None), [])
         # This will generate new key
         key = get_gpg_sign_key()
         self.check_errors()
@@ -95,8 +79,8 @@ class GPGTest(TestCase):
     @override_settings(
         WEBLATE_GPG_IDENTITY="Weblate <weblate@example.com>", WEBLATE_GPG_ALGO="rsa512"
     )
-    def test_public(self):
-        self.assertEqual(check_data_writable(), [])
+    def test_public(self) -> None:
+        self.assertEqual(check_data_writable(app_configs=None, databases=None), [])
         # This will generate new key
         key = get_gpg_public_key()
         self.check_errors()

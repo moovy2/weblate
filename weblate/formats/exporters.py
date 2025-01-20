@@ -1,223 +1,56 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Exporter using translate-toolkit."""
+
+from __future__ import annotations
 
 import re
 from itertools import chain
 
-from django.http import HttpResponse
-from django.utils.functional import cached_property
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy
 from lxml.etree import XMLSyntaxError
 from translate.misc.multistring import multistring
 from translate.storage.aresource import AndroidResourceFile
 from translate.storage.csvl10n import csvfile
-from translate.storage.jsonl10n import JsonFile
+from translate.storage.jsonl10n import JsonFile, JsonNestedFile
 from translate.storage.mo import mofile
 from translate.storage.po import pofile
 from translate.storage.poxliff import PoXliffFile
-from translate.storage.properties import stringsfile
+from translate.storage.properties import stringsutf8file
 from translate.storage.tbx import tbxfile
 from translate.storage.tmx import tmxfile
 from translate.storage.xliff import xlifffile
 
 import weblate.utils.version
 from weblate.formats.external import XlsxFormat
-from weblate.formats.ttkit import TTKitFormat
-from weblate.trans.util import split_plural, xliff_string_to_rich
-from weblate.utils.site import get_site_url
+from weblate.trans.util import xliff_string_to_rich
+from weblate.utils.csv import PROHIBITED_INITIAL_CHARS
+
+from .base import BaseExporter
 
 # Map to remove control characters except newlines and tabs
 # Based on lxml - src/lxml/apihelpers.pxi _is_valid_xml_utf8
 XML_REPLACE_CHARMAP = dict.fromkeys(
     chain(
-        (x for x in range(32) if x not in (9, 10, 13)),
+        (x for x in range(32) if x not in {9, 10, 13}),
         [0xFFFE, 0xFFFF],
         range(0xD800, 0xDFFF + 1),
     )
 )
 
-DASHES = re.compile("--+")
-
-
-class BaseExporter:
-    content_type = "text/plain"
-    extension = "txt"
-    name = ""
-    verbose = ""
-    set_id = False
-
-    def __init__(
-        self,
-        project=None,
-        source_language=None,
-        language=None,
-        url=None,
-        translation=None,
-        fieldnames=None,
-    ):
-        if translation is not None:
-            self.plural = translation.plural
-            self.project = translation.component.project
-            self.source_language = translation.component.source_language
-            self.language = translation.language
-            self.url = get_site_url(translation.get_absolute_url())
-        else:
-            self.project = project
-            self.language = language
-            self.source_language = source_language
-            self.plural = language.plural
-            self.url = url
-        self.fieldnames = fieldnames
-
-    @staticmethod
-    def supports(translation):
-        return True
-
-    @cached_property
-    def storage(self):
-        storage = self.get_storage()
-        storage.setsourcelanguage(self.source_language.code)
-        storage.settargetlanguage(self.language.code)
-        return storage
-
-    def string_filter(self, text):
-        return text
-
-    def handle_plurals(self, plurals):
-        if len(plurals) == 1:
-            return self.string_filter(plurals[0])
-        return multistring([self.string_filter(plural) for plural in plurals])
-
-    @classmethod
-    def get_identifier(cls):
-        return cls.name
-
-    def get_storage(self):
-        return self.storage_class()
-
-    def add(self, unit, word):
-        unit.target = word
-
-    def create_unit(self, source):
-        return self.storage.UnitClass(source)
-
-    def add_units(self, units):
-        for unit in units:
-            self.add_unit(unit)
-
-    def build_unit(self, unit):
-        output = self.create_unit(self.handle_plurals(unit.get_source_plurals()))
-        # Propagate source language
-        if hasattr(output, "setsource"):
-            output.setsource(output.source, sourcelang=self.source_language.code)
-        self.add(output, self.handle_plurals(unit.get_target_plurals()))
-        return output
-
-    def add_note(self, output, note: str, origin: str):
-        output.addnote(note, origin=origin)
-
-    def add_unit(self, unit):
-        output = self.build_unit(unit)
-        # Location needs to be set prior to ID to avoid overwrite
-        # on some formats (for example xliff)
-        for location in unit.location.split():
-            if location:
-                output.addlocation(location)
-
-        # Store context as context and ID
-        context = self.string_filter(unit.context)
-        if context:
-            output.setcontext(context)
-            if self.set_id:
-                output.setid(context)
-        elif self.set_id:
-            # Use checksum based ID on formats requiring it
-            output.setid(unit.checksum)
-
-        # Store note
-        note = self.string_filter(unit.note)
-        if note:
-            self.add_note(output, note, origin="developer")
-        # In Weblate explanation
-        note = self.string_filter(unit.source_unit.explanation)
-        if note:
-            self.add_note(output, note, origin="developer")
-        # Comments
-        for comment in unit.unresolved_comments:
-            self.add_note(output, comment.comment, origin="translator")
-        # Suggestions
-        for suggestion in unit.suggestions:
-            self.add_note(
-                output,
-                "Suggested in Weblate: {}".format(
-                    ", ".join(split_plural(suggestion.target))
-                ),
-                origin="translator",
-            )
-
-        # Store flags
-        if unit.all_flags:
-            self.store_flags(output, unit.all_flags)
-
-        # Store fuzzy flag
-        self.store_unit_state(output, unit)
-
-        self.storage.addunit(output)
-
-    def store_unit_state(self, output, unit):
-        if unit.fuzzy:
-            output.markfuzzy(True)
-        if hasattr(output, "markapproved"):
-            output.markapproved(unit.approved)
-
-    def get_response(self, filetemplate="{project}-{language}.{extension}"):
-        filename = filetemplate.format(
-            project=self.project.slug,
-            language=self.language.code,
-            extension=self.extension,
-        )
-
-        response = HttpResponse(content_type=f"{self.content_type}; charset=utf-8")
-        response["Content-Disposition"] = f"attachment; filename={filename}"
-
-        # Save to response
-        response.write(self.serialize())
-
-        return response
-
-    def serialize(self):
-        """Return storage content."""
-        return TTKitFormat.serialize(self.storage)
-
-    def store_flags(self, output, flags):
-        return
+DASHES = re.compile(r"--+")
 
 
 class PoExporter(BaseExporter):
     name = "po"
     content_type = "text/x-po"
     extension = "po"
-    verbose = _("gettext PO")
+    verbose = gettext_lazy("gettext PO")
     storage_class = pofile
 
-    def store_flags(self, output, flags):
+    def store_flags(self, output, flags) -> None:
         for flag in flags.items():
             output.settypecomment(flags.format_flag(flag))
 
@@ -237,7 +70,7 @@ class PoExporter(BaseExporter):
         return store
 
 
-class XMLFilterMixin:
+class XMLFilterMixin(BaseExporter):
     def string_filter(self, text):
         return super().string_filter(text).translate(XML_REPLACE_CHARMAP)
 
@@ -251,7 +84,7 @@ class XMLExporter(XMLFilterMixin, BaseExporter):
             targetlanguage=self.language.code,
         )
 
-    def add(self, unit, word):
+    def add(self, unit, word) -> None:
         unit.settarget(word, self.language.code)
 
 
@@ -260,10 +93,10 @@ class PoXliffExporter(XMLExporter):
     content_type = "application/x-xliff+xml"
     extension = "xlf"
     set_id = True
-    verbose = _("XLIFF 1.1 with gettext extensions")
+    verbose = gettext_lazy("XLIFF 1.1 with gettext extensions")
     storage_class = PoXliffFile
 
-    def store_flags(self, output, flags):
+    def store_flags(self, output, flags) -> None:
         if flags.has_value("max-length"):
             output.xmlelement.set("maxwidth", str(flags.get_value("max-length")))
 
@@ -291,7 +124,7 @@ class XliffExporter(PoXliffExporter):
     content_type = "application/x-xliff+xml"
     extension = "xlf"
     set_id = True
-    verbose = _("XLIFF 1.1")
+    verbose = gettext_lazy("XLIFF 1.1")
     storage_class = xlifffile
 
 
@@ -299,7 +132,7 @@ class TBXExporter(XMLExporter):
     name = "tbx"
     content_type = "application/x-tbx"
     extension = "tbx"
-    verbose = _("TBX")
+    verbose = gettext_lazy("TBX")
     storage_class = tbxfile
 
 
@@ -307,7 +140,7 @@ class TMXExporter(XMLExporter):
     name = "tmx"
     content_type = "application/x-tmx"
     extension = "tmx"
-    verbose = _("TMX")
+    verbose = gettext_lazy("TMX")
     storage_class = tmxfile
 
 
@@ -315,7 +148,7 @@ class MoExporter(PoExporter):
     name = "mo"
     content_type = "application/x-gettext-catalog"
     extension = "mo"
-    verbose = _("gettext MO")
+    verbose = gettext_lazy("gettext MO")
     storage_class = mofile
 
     def __init__(
@@ -326,7 +159,7 @@ class MoExporter(PoExporter):
         url=None,
         translation=None,
         fieldnames=None,
-    ):
+    ) -> None:
         super().__init__(
             project=project,
             source_language=source_language,
@@ -347,13 +180,10 @@ class MoExporter(PoExporter):
                 except IndexError:
                     pass
 
-    def store_flags(self, output, flags):
+    def store_flags(self, output, flags) -> None:
         return
 
-    def add_unit(self, unit):
-        # We do not store untranslated units
-        if not unit.translated:
-            return
+    def add_unit(self, unit) -> None:
         # Parse properties from unit
         if self.monolingual:
             if self.use_context:
@@ -375,24 +205,30 @@ class MoExporter(PoExporter):
 
     @staticmethod
     def supports(translation):
-        return translation.component.file_format == "po"
+        return translation.component.file_format in {"po", "po-mono"}
 
 
 class CVSBaseExporter(BaseExporter):
     storage_class = csvfile
 
     def get_storage(self):
-        return self.storage_class(fieldnames=self.fieldnames)
+        storage = self.storage_class(fieldnames=self.fieldnames)
+        # Use Excel dialect instead of translate-toolkit "default" to avoid
+        # unnecessary escaping with backslash which later confuses our importer
+        # at it is typically used occasionally.
+        storage.dialect = "excel"
+        return storage
 
 
 class CSVExporter(CVSBaseExporter):
     name = "csv"
     content_type = "text/csv"
     extension = "csv"
-    verbose = _("CSV")
+    verbose = gettext_lazy("CSV")
 
     def string_filter(self, text):
-        """Avoid Excel interpreting text as formula.
+        """
+        Avoid Excel interpreting text as formula.
 
         This is really bad idea, implemented in Excel, as this change leads to
         displaying additional ' in all other tools, but this seems to be what most
@@ -401,7 +237,7 @@ class CSVExporter(CVSBaseExporter):
 
         Reverse for this is in weblate.formats.ttkit.CSVUnit.unescape_csv
         """
-        if text and text[0] in ("=", "+", "-", "@", "|", "%"):
+        if text and text[0] in PROHIBITED_INITIAL_CHARS:
             return "'{}'".format(text.replace("|", "\\|"))
         return text
 
@@ -410,7 +246,7 @@ class XlsxExporter(XMLFilterMixin, CVSBaseExporter):
     name = "xlsx"
     content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     extension = "xlsx"
-    verbose = _("XLSX")
+    verbose = gettext_lazy("XLSX")
 
     def serialize(self):
         """Return storage content."""
@@ -436,7 +272,13 @@ class JSONExporter(MonolingualExporter):
     name = "json"
     content_type = "application/json"
     extension = "json"
-    verbose = _("JSON")
+    verbose = gettext_lazy("JSON")
+
+
+class JSONNestedExporter(JSONExporter):
+    name = "json-nested"
+    verbose = gettext_lazy("JSON nested structure file")
+    storage_class = JsonNestedFile
 
 
 class AndroidResourceExporter(XMLFilterMixin, MonolingualExporter):
@@ -444,14 +286,14 @@ class AndroidResourceExporter(XMLFilterMixin, MonolingualExporter):
     name = "aresource"
     content_type = "application/xml"
     extension = "xml"
-    verbose = _("Android String Resource")
+    verbose = gettext_lazy("Android String Resource")
 
-    def add(self, unit, word):
+    def add(self, unit, word) -> None:
         # Need to have storage to handle plurals
-        unit._store = self.storage
+        unit._store = self.storage  # noqa: SLF001
         super().add(unit, word)
 
-    def add_note(self, output, note: str, origin: str):
+    def add_note(self, output, note: str, origin: str) -> None:
         # Remove -- from the comment or - at the end as that is not
         # allowed inside XML comment
         note = DASHES.sub("-", note)
@@ -461,11 +303,11 @@ class AndroidResourceExporter(XMLFilterMixin, MonolingualExporter):
 
 
 class StringsExporter(MonolingualExporter):
-    storage_class = stringsfile
+    storage_class = stringsutf8file
     name = "strings"
     content_type = "text/plain"
     extension = "strings"
-    verbose = _("iOS strings")
+    verbose = gettext_lazy("iOS strings")
 
     def create_unit(self, source):
         return self.storage.UnitClass(source, self.storage.personality.name)

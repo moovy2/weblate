@@ -9,6 +9,9 @@ lists third-party libraries which integrate Weblate.
 * `WeblateFX, a JavaFX-based Weblate desktop client <https://github.com/javierllorente/weblatefx>`_
 * `JWeblate, a Java-based Weblate library <https://github.com/javierllorente/jweblate>`_
 * `Spring MessageSource backed by a Weblate server <https://github.com/porscheinformatik/weblate-spring>`_
+* `GoLang API library for weblate <https://gitlab.com/gajdusek/goweblate>`_
+* `Perceval backends for Weblate <https://github.com/chaoss/grimoirelab-perceval-weblate>`_
+* `Visual Studio Code Extension for Weblate <https://github.com/ianFar96/vscode-weblate-extension>`_
 
 .. hint::
 

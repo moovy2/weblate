@@ -1,13 +1,11 @@
-# SOME DESCRIPTIVE TITLE.
-# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
-# This file is distributed under the same license as the PACKAGE package.
-# ប៉ុកណូ រ៉ូយ៉ាល់ <royalpokno68@gmail.com>, 2019, 2020, 2021.
-# Anonymous <noreply@weblate.org>, 2020.
+# Copyright © Michal Čihař <michal@weblate.org>
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 msgid ""
 msgstr ""
-"Project-Id-Version: Weblate 4.14.1\n"
+"Project-Id-Version: Weblate 5.10\n"
 "Report-Msgid-Bugs-To: https://github.com/WeblateOrg/weblate/issues\n"
-"POT-Creation-Date: 2022-08-26 06:38+0000\n"
+"POT-Creation-Date: 2025-01-17 12:44+0000\n"
 "PO-Revision-Date: 2021-08-09 06:59+0000\n"
 "Last-Translator: ប៉ុកណូ រ៉ូយ៉ាល់ <royalpokno68@gmail.com>\n"
 "Language-Team: Khmer (Central) <https://hosted.weblate.org/projects/weblate/"
@@ -19,375 +17,438 @@ msgstr ""
 "Plural-Forms: nplurals=1; plural=0;\n"
 "X-Generator: Weblate 4.8-dev\n"
 
-#: weblate/static/editor/base.js:90
+#: weblate/static/editor/base.js:91
 msgid "Please select target plural by clicking."
 msgstr "សូមជ្រើសរើសពហុវចនៈគោលដៅដោយការចុច។"
 
-#: weblate/static/editor/base.js:170
+#: weblate/static/editor/base.js:145
+#, fuzzy
+#| msgid "There are some unsaved changes, are you sure you want to leave?"
+msgid "You have unsaved changes. Are you sure you want to skip?"
+msgstr "ទាំងនេះជាការផ្លាស់ប្ដូរខ្លះៗដែលមិនបានរក្សាទុក តើអ្នកពិតជាចង់ចាកចេញឬ?"
+
+#: weblate/static/editor/base.js:180
 #, javascript-format
 msgid "Cmd+%s"
 msgstr "Cmd+%s"
 
-#: weblate/static/editor/base.js:172
+#: weblate/static/editor/base.js:182
 #, javascript-format
 msgid "Ctrl+%s"
 msgstr "Ctrl+%s"
 
-#: weblate/static/editor/full.js:238
+#: weblate/static/editor/full.js:260
+msgid "Translation memory entry removed."
+msgstr ""
+
+#: weblate/static/editor/full.js:294
 msgid "The request for machine translation has failed:"
 msgstr "ការស្នើសុំសម្រាប់ការបកប្រែតាមម៉ាស៊ីនត្រូវបានបរាជ័យ៖"
 
-#: weblate/static/editor/full.js:251
+#: weblate/static/editor/full.js:304
 #, javascript-format
 msgid "The request for machine translation using %s has failed:"
 msgstr "ការស្នើសុំសម្រាប់ការបកប្រែតាមម៉ាស៊ីន ដោយប្រើ %s បានបរាជ័យ៖"
 
-#: weblate/static/editor/full.js:285
+#: weblate/static/editor/full.js:339
 #, javascript-format
 msgid "Cmd+M then %s"
 msgstr "Cmd+M បន្ទាប់មក %s"
 
-#: weblate/static/editor/full.js:287
+#: weblate/static/editor/full.js:341
 #, javascript-format
 msgid "Ctrl+M then %s"
 msgstr "Ctrl+M បន្ទាប់មក %s"
 
-#: weblate/static/editor/full.js:389
+#: weblate/static/editor/full.js:443
 #, javascript-format
 msgid "Press Cmd+I then %s to dismiss this."
 msgstr "សង្កត់ Ctrl+I បន្ទាប់មក %s ដើម្បីបដិសេធរឿងនេះ។"
 
-#: weblate/static/editor/full.js:394
+#: weblate/static/editor/full.js:448
 #, javascript-format
 msgid "Press Ctrl+I then %s to dismiss this."
 msgstr "សង្កត់ Ctrl+I បន្ទាប់មក %s ដើម្បីបដិសេធរឿងនេះ។"
 
-#: weblate/static/editor/full.js:532
-msgid "Copy"
-msgstr "ចម្លង"
+#: weblate/static/editor/full.js:592
+msgid "Clone to translation"
+msgstr ""
 
-#: weblate/static/editor/full.js:538
-msgid "Copy and save"
-msgstr "ចម្លង និងរក្សាទុក"
+#: weblate/static/editor/full.js:594
+msgid "Accept"
+msgstr ""
 
-#: weblate/static/editor/zen.js:101
+#: weblate/static/editor/full.js:603
+msgid "Delete entry"
+msgstr ""
+
+#: weblate/static/editor/tools/search.js:49
+msgid "No results found"
+msgstr ""
+
+#: weblate/static/editor/tools/search.js:102
+#, javascript-format
+msgid "%s matching string"
+msgid_plural "%s matching strings"
+msgstr[0] ""
+
+#: weblate/static/editor/zen.js:114
 msgid "There are some unsaved changes, are you sure you want to leave?"
 msgstr "ទាំងនេះជាការផ្លាស់ប្ដូរខ្លះៗដែលមិនបានរក្សាទុក តើអ្នកពិតជាចង់ចាកចេញឬ?"
 
-#: weblate/static/loader-bootstrap.js:155
+#: weblate/static/js/screenshots/clipboard-paste.js:38
+msgid "Image Pasted!"
+msgstr ""
+
+#: weblate/static/js/screenshots/clipboard-paste.js:40
+#: weblate/static/js/screenshots/clipboard-paste.js:56
+msgid "Something went wrong!"
+msgstr ""
+
+#: weblate/static/js/screenshots/clipboard-paste.js:53
+msgid "No image found in clipboard"
+msgstr ""
+
+#: weblate/static/loader-bootstrap.js:171
 msgid "Error loading search results!"
 msgstr "កំហុសពេលកំពុងផ្ទុកលទ្ធផលស្វែងរក!"
 
-#: weblate/static/loader-bootstrap.js:159
+#: weblate/static/loader-bootstrap.js:175
 msgid "No new matching source strings found."
 msgstr "រកមិនឃើញប្រភពតួអក្សរថ្មីដែលត្រូវផ្គូរផ្គងឡើយ។"
 
-#: weblate/static/loader-bootstrap.js:229
+#: weblate/static/loader-bootstrap.js:259
 msgid "Sort this column"
 msgstr "តម្រង់ជួរឈរនេះ"
 
-#: weblate/static/loader-bootstrap.js:468
+#: weblate/static/loader-bootstrap.js:576
 msgid "Error while loading page:"
 msgstr "កំហុសខណះពេលកំពុងផ្ទុកទំព័រឡើង៖"
 
-#: weblate/static/loader-bootstrap.js:626
-#: weblate/static/loader-bootstrap.js:633
-msgid "Sunday"
-msgstr "ថ្ងៃអាទិត្យ"
+#: weblate/static/loader-bootstrap.js:849
+msgid "Text copied to clipboard."
+msgstr "អត្ថបទត្រូវបានចម្លងទៅក្ដារតម្រៀប។"
 
-#: weblate/static/loader-bootstrap.js:627
-msgid "Monday"
-msgstr "ថ្ងៃច័ន្ទ"
+#: weblate/static/loader-bootstrap.js:853
+msgid "Please press Ctrl+C to copy."
+msgstr "សូមសង្កត់ Ctrl+C ដើម្បីចម្លង។"
 
-#: weblate/static/loader-bootstrap.js:628
-msgid "Tuesday"
-msgstr "ថ្ងៃអង្គារ"
+#: weblate/static/loader-bootstrap.js:878
+msgid "Search…"
+msgstr "ស្វែងរក…"
 
-#: weblate/static/loader-bootstrap.js:629
-msgid "Wednesday"
-msgstr "ថ្ងៃពុធ"
+#: weblate/static/loader-bootstrap.js:880
+msgid "Available:"
+msgstr "អាចប្រើបាន៖"
 
-#: weblate/static/loader-bootstrap.js:630
-msgid "Thursday"
-msgstr "ថ្ងៃព្រហស្បតិ៍"
+#: weblate/static/loader-bootstrap.js:882
+msgid "Chosen:"
+msgstr "ជ្រើសរើស៖"
 
-#: weblate/static/loader-bootstrap.js:631
-msgid "Friday"
-msgstr "ថ្ងៃសុក្រ"
+#: weblate/static/loader-bootstrap.js:1186
+msgid "Weblate is now scanning the repository, please be patient."
+msgstr "Weblate ឥឡូវនេះកំពុងវិភាគមើលឃ្លាំង សូមមេត្តាអត់ធ្មត់។"
 
-#: weblate/static/loader-bootstrap.js:632
-msgid "Saturday"
-msgstr "ថ្ងៃសៅរ៍"
+#: weblate/static/loader-bootstrap.js:1301
+msgid ""
+"Notification settings removed, please do not forget to save the changes."
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:636
-#: weblate/static/loader-bootstrap.js:643
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Sun"
-msgstr "អាទិត្យ"
+#: weblate/static/loader-bootstrap.js:1463
+msgid "Custom range"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:637
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Mon"
-msgstr "ច័ន្ទ"
+#: weblate/static/loader-bootstrap.js:1464
+msgid "Clear"
+msgstr "ជម្រះ"
 
-#: weblate/static/loader-bootstrap.js:638
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Tue"
-msgstr "អង្គារ"
-
-#: weblate/static/loader-bootstrap.js:639
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Wed"
-msgstr "ពុធ"
-
-#: weblate/static/loader-bootstrap.js:640
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Thu"
-msgstr "ព្រ.ហ"
-
-#: weblate/static/loader-bootstrap.js:641
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Fri"
-msgstr "សុក្រ"
-
-#: weblate/static/loader-bootstrap.js:642
-msgctxt "Short (for example three letter) name of day in week"
-msgid "Sat"
-msgstr "សៅរ៍"
-
-#: weblate/static/loader-bootstrap.js:646
-#: weblate/static/loader-bootstrap.js:653
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1466
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Su"
+msgctxt "Short name of day"
 msgid "Su"
 msgstr "អា"
 
-#: weblate/static/loader-bootstrap.js:647
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1467
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Mo"
+msgctxt "Short name of day"
 msgid "Mo"
 msgstr "ច"
 
-#: weblate/static/loader-bootstrap.js:648
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1468
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Tu"
+msgctxt "Short name of day"
 msgid "Tu"
 msgstr "អ"
 
-#: weblate/static/loader-bootstrap.js:649
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1469
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "We"
+msgctxt "Short name of day"
 msgid "We"
 msgstr "ព"
 
-#: weblate/static/loader-bootstrap.js:650
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1470
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Th"
+msgctxt "Short name of day"
 msgid "Th"
 msgstr "ព្រ."
 
-#: weblate/static/loader-bootstrap.js:651
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1471
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Fr"
+msgctxt "Short name of day"
 msgid "Fr"
 msgstr "សុ"
 
-#: weblate/static/loader-bootstrap.js:652
-msgctxt "Minimal (for example two letter) name of day in week"
+#: weblate/static/loader-bootstrap.js:1472
+#, fuzzy
+#| msgctxt "Minimal (for example two letter) name of day in week"
+#| msgid "Sa"
+msgctxt "Short name of day"
 msgid "Sa"
 msgstr "ស"
 
-#: weblate/static/loader-bootstrap.js:656
-msgid "January"
-msgstr "មករា"
-
-#: weblate/static/loader-bootstrap.js:657
-msgid "February"
-msgstr "កុម្ភះ"
-
-#: weblate/static/loader-bootstrap.js:658
-msgid "March"
-msgstr "មិនា"
-
-#: weblate/static/loader-bootstrap.js:659
-msgid "April"
-msgstr "មេសា"
-
-#: weblate/static/loader-bootstrap.js:660
-msgid "May"
-msgstr "ឧសភា"
-
-#: weblate/static/loader-bootstrap.js:661
-msgid "June"
-msgstr "មិថុនា"
-
-#: weblate/static/loader-bootstrap.js:662
-msgid "July"
-msgstr "កក្កដា"
-
-#: weblate/static/loader-bootstrap.js:663
-msgid "August"
-msgstr "សីហា"
-
-#: weblate/static/loader-bootstrap.js:664
-msgid "September"
-msgstr "កញ្ញា"
-
-#: weblate/static/loader-bootstrap.js:665
-msgid "October"
-msgstr "តុលា"
-
-#: weblate/static/loader-bootstrap.js:666
-msgid "November"
-msgstr "វិច្ឆិកា"
-
-#: weblate/static/loader-bootstrap.js:667
-msgid "December"
-msgstr "ធ្នូ"
-
-#: weblate/static/loader-bootstrap.js:670
+#: weblate/static/loader-bootstrap.js:1475
 msgctxt "Short name of month"
 msgid "Jan"
 msgstr "មករា"
 
-#: weblate/static/loader-bootstrap.js:671
+#: weblate/static/loader-bootstrap.js:1476
 msgctxt "Short name of month"
 msgid "Feb"
 msgstr "កុម្ភះ"
 
-#: weblate/static/loader-bootstrap.js:672
+#: weblate/static/loader-bootstrap.js:1477
 msgctxt "Short name of month"
 msgid "Mar"
 msgstr "មិនា"
 
-#: weblate/static/loader-bootstrap.js:673
+#: weblate/static/loader-bootstrap.js:1478
 msgctxt "Short name of month"
 msgid "Apr"
 msgstr "មេសា"
 
-#: weblate/static/loader-bootstrap.js:674
+#: weblate/static/loader-bootstrap.js:1479
 msgctxt "Short name of month"
 msgid "May"
 msgstr "ឧសភា"
 
-#: weblate/static/loader-bootstrap.js:675
+#: weblate/static/loader-bootstrap.js:1480
 msgctxt "Short name of month"
 msgid "Jun"
 msgstr "មិថុនា"
 
-#: weblate/static/loader-bootstrap.js:676
+#: weblate/static/loader-bootstrap.js:1481
 msgctxt "Short name of month"
 msgid "Jul"
 msgstr "កក្កដា"
 
-#: weblate/static/loader-bootstrap.js:677
+#: weblate/static/loader-bootstrap.js:1482
 msgctxt "Short name of month"
 msgid "Aug"
 msgstr "សីហា"
 
-#: weblate/static/loader-bootstrap.js:678
+#: weblate/static/loader-bootstrap.js:1483
 msgctxt "Short name of month"
 msgid "Sep"
 msgstr "កញ្ញា"
 
-#: weblate/static/loader-bootstrap.js:679
+#: weblate/static/loader-bootstrap.js:1484
 msgctxt "Short name of month"
 msgid "Oct"
 msgstr "តុលា"
 
-#: weblate/static/loader-bootstrap.js:680
+#: weblate/static/loader-bootstrap.js:1485
 msgctxt "Short name of month"
 msgid "Nov"
 msgstr "វិច្ឆិកា"
 
-#: weblate/static/loader-bootstrap.js:681
+#: weblate/static/loader-bootstrap.js:1486
 msgctxt "Short name of month"
 msgid "Dec"
 msgstr "ធ្នូ"
 
-#: weblate/static/loader-bootstrap.js:683
+#: weblate/static/loader-bootstrap.js:1490
 msgid "Today"
 msgstr "ថ្ងៃនេះ"
 
-#: weblate/static/loader-bootstrap.js:684
-msgid "Clear"
-msgstr "ជម្រះ"
+#: weblate/static/loader-bootstrap.js:1491
+msgid "Yesterday"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:813
-msgid "Text copied to clipboard."
-msgstr "អត្ថបទត្រូវបានចម្លងទៅក្ដារតម្រៀប។"
+#: weblate/static/loader-bootstrap.js:1495
+msgid "Last 7 days"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:817
-msgid "Please press Ctrl+C to copy."
-msgstr "សូមសង្កត់ Ctrl+C ដើម្បីចម្លង។"
+#: weblate/static/loader-bootstrap.js:1496
+msgid "Last 30 days"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:841
-msgid "Search…"
-msgstr "ស្វែងរក…"
+#: weblate/static/loader-bootstrap.js:1497
+msgid "This month"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:842
-msgid "Available:"
-msgstr "អាចប្រើបាន៖"
+#: weblate/static/loader-bootstrap.js:1501
+msgid "Last month"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:843
-msgid "Chosen:"
-msgstr "ជ្រើសរើស៖"
+#: weblate/static/loader-bootstrap.js:1505
+msgid "This year"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:1104
-msgid "Weblate is now scanning the repository, please be patient."
-msgstr "Weblate ឥឡូវនេះកំពុងវិភាគមើលឃ្លាំង សូមមេត្តាអត់ធ្មត់។"
+#: weblate/static/loader-bootstrap.js:1509
+msgid "Last year"
+msgstr ""
 
-#: weblate/static/loader-bootstrap.js:1199
+#: weblate/static/loader-bootstrap.js:1591
 msgctxt "Alert to user when opening browser developer console"
 msgid "Stop!"
 msgstr ""
 
-#: weblate/static/loader-bootstrap.js:1205
+#: weblate/static/loader-bootstrap.js:1598
 msgid ""
 "This is a browser feature intended for developers. If someone told you to "
 "copy-paste something here, they are likely trying to compromise your Weblate "
 "account."
 msgstr ""
 
-#: weblate/static/loader-bootstrap.js:1212
+#: weblate/static/loader-bootstrap.js:1605
 msgid "See https://en.wikipedia.org/wiki/Self-XSS for more information."
 msgstr ""
 
-#: weblate/static/zammad.js:3
-msgid "Weblate feedback"
-msgstr "មតិអ្នកប្រើ Weblate"
+#~ msgid "Weblate feedback"
+#~ msgstr "មតិអ្នកប្រើ Weblate"
 
-#: weblate/static/zammad.js:4
-msgid "Get help"
-msgstr "រកជំនួយ"
+#~ msgid "Get help"
+#~ msgstr "រកជំនួយ"
 
-#: weblate/static/zammad.js:6
 #, javascript-format
-msgid ""
-"Thank you for your inquiry (#%s)! We'll contact you as soon as possible."
-msgstr "អរគុណអ្នក សម្រាប់សំណួរ (#%s) របស់អ្នក! យើងនឹងទំនាក់ទំនងអ្នកវិញឲ្យបានឆាប់បំផុត។"
+#~ msgid ""
+#~ "Thank you for your inquiry (#%s)! We'll contact you as soon as possible."
+#~ msgstr "អរគុណអ្នក សម្រាប់សំណួរ (#%s) របស់អ្នក! យើងនឹងទំនាក់ទំនងអ្នកវិញឲ្យបានឆាប់បំផុត។"
 
-#: weblate/static/zammad.js:13
-msgid "Subject"
-msgstr "ប្រធានបទ"
+#~ msgid "Subject"
+#~ msgstr "ប្រធានបទ"
 
-#: weblate/static/zammad.js:21
-msgid "Your name"
-msgstr "ឈ្មោះរបស់អ្នក"
+#~ msgid "Your name"
+#~ msgstr "ឈ្មោះរបស់អ្នក"
 
-#: weblate/static/zammad.js:29
-msgid "Your e-mail"
-msgstr "អ៊ីម៉ែលរបស់អ្នក"
+#~ msgid "Your e-mail"
+#~ msgstr "អ៊ីម៉ែលរបស់អ្នក"
 
-#: weblate/static/zammad.js:37
-msgid "Message"
-msgstr "សារ"
+#~ msgid "Message"
+#~ msgstr "សារ"
 
-#: weblate/static/zammad.js:41
-msgid ""
-"Please contact us in English, otherwise we might be unable to process your "
-"request."
-msgstr ""
-"សូមទាក់ទងមកយើងជាភាសាអង់គ្លេស បើមិនដូច្នេះទេយើងប្រហែលជាមិនអាចដំណើរការ "
-"ការស្នើសុំរបស់អ្នកបានឡើយ។"
+#~ msgid ""
+#~ "Please contact us in English, otherwise we might be unable to process "
+#~ "your request."
+#~ msgstr ""
+#~ "សូមទាក់ទងមកយើងជាភាសាអង់គ្លេស បើមិនដូច្នេះទេយើងប្រហែលជាមិនអាចដំណើរការ "
+#~ "ការស្នើសុំរបស់អ្នកបានឡើយ។"
 
-#: weblate/static/zammad.js:47
-msgid "Attachments"
-msgstr "ឯកសារភ្ជាប់"
+#~ msgid "Attachments"
+#~ msgstr "ឯកសារភ្ជាប់"
+
+#~ msgid "Sunday"
+#~ msgstr "ថ្ងៃអាទិត្យ"
+
+#~ msgid "Monday"
+#~ msgstr "ថ្ងៃច័ន្ទ"
+
+#~ msgid "Tuesday"
+#~ msgstr "ថ្ងៃអង្គារ"
+
+#~ msgid "Wednesday"
+#~ msgstr "ថ្ងៃពុធ"
+
+#~ msgid "Thursday"
+#~ msgstr "ថ្ងៃព្រហស្បតិ៍"
+
+#~ msgid "Friday"
+#~ msgstr "ថ្ងៃសុក្រ"
+
+#~ msgid "Saturday"
+#~ msgstr "ថ្ងៃសៅរ៍"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Sun"
+#~ msgstr "អាទិត្យ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Mon"
+#~ msgstr "ច័ន្ទ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Tue"
+#~ msgstr "អង្គារ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Wed"
+#~ msgstr "ពុធ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Thu"
+#~ msgstr "ព្រ.ហ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Fri"
+#~ msgstr "សុក្រ"
+
+#~ msgctxt "Short (for example three letter) name of day in week"
+#~ msgid "Sat"
+#~ msgstr "សៅរ៍"
+
+#~ msgid "January"
+#~ msgstr "មករា"
+
+#~ msgid "February"
+#~ msgstr "កុម្ភះ"
+
+#~ msgid "March"
+#~ msgstr "មិនា"
+
+#~ msgid "April"
+#~ msgstr "មេសា"
+
+#~ msgid "May"
+#~ msgstr "ឧសភា"
+
+#~ msgid "June"
+#~ msgstr "មិថុនា"
+
+#~ msgid "July"
+#~ msgstr "កក្កដា"
+
+#~ msgid "August"
+#~ msgstr "សីហា"
+
+#~ msgid "September"
+#~ msgstr "កញ្ញា"
+
+#~ msgid "October"
+#~ msgstr "តុលា"
+
+#~ msgid "November"
+#~ msgstr "វិច្ឆិកា"
+
+#~ msgid "December"
+#~ msgstr "ធ្នូ"
+
+#~ msgid "Copy"
+#~ msgstr "ចម្លង"
+
+#~ msgid "Copy and save"
+#~ msgstr "ចម្លង និងរក្សាទុក"
 
 #~ msgid "Add to screenshot"
 #~ msgstr "បន្ថែមទៅរូបថតអេក្រង់"

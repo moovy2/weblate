@@ -1,38 +1,25 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 from django.shortcuts import redirect, render
-from django.utils.translation import gettext_lazy as _
+from django.urls import reverse
+from django.utils.translation import gettext_lazy
 from django.views.decorators.cache import never_cache
 from django.views.generic import TemplateView
 
-from weblate.auth.models import User
+from weblate.auth.models import AuthenticatedHttpRequest, User
 from weblate.legal.forms import TOSForm
 from weblate.legal.models import Agreement
 from weblate.trans.util import redirect_next
 
 MENU = (
-    ("index", "legal:index", _("Overview")),
-    ("terms", "legal:terms", _("Terms of Service")),
-    ("cookies", "legal:cookies", _("Cookies")),
-    ("privacy", "legal:privacy", _("Privacy")),
-    ("contracts", "legal:contracts", _("Subcontractors")),
+    ("index", "legal:index", gettext_lazy("Overview")),
+    ("terms", "legal:terms", gettext_lazy("General Terms and Conditions")),
+    ("cookies", "legal:cookies", gettext_lazy("Cookies")),
+    ("privacy", "legal:privacy", gettext_lazy("Privacy Policy")),
+    ("contracts", "legal:contracts", gettext_lazy("Subcontractors")),
 )
 
 
@@ -44,6 +31,8 @@ class LegalView(TemplateView):
 
         context["legal_menu"] = MENU
         context["legal_page"] = self.page
+        context["privacy_url"] = reverse("legal:privacy")
+        context["terms_url"] = reverse("legal:terms")
 
         return context
 
@@ -68,7 +57,7 @@ class ContractsView(LegalView):
 
 
 @never_cache
-def tos_confirm(request):
+def tos_confirm(request: AuthenticatedHttpRequest):
     user = None
     if request.user.is_authenticated:
         user = request.user
@@ -90,4 +79,8 @@ def tos_confirm(request):
     else:
         form = TOSForm(initial={"next": request.GET.get("next")})
 
-    return render(request, "legal/confirm.html", {"form": form})
+    return render(
+        request,
+        "legal/confirm.html",
+        {"form": form, "privacy_url": reverse("legal:privacy")},
+    )

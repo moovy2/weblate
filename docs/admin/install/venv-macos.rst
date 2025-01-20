@@ -7,21 +7,7 @@ Installing on macOS
 
 .. code-block:: sh
 
-    brew install python pango cairo gobject-introspection libffi glib libyaml
-    pip install virtualenv
-
-Make sure pip will be able to find the ``libffi`` version provided by homebrew
-— this will be needed during the installation build step.
-
-.. code-block:: sh
-
-    export PKG_CONFIG_PATH="/usr/local/opt/libffi/lib/pkgconfig"
-
-.. include:: steps/install-system-optional.rst
-
-.. code-block:: sh
-
-    brew install tesseract
+   brew install python pango cairo gobject-introspection glib libyaml pkgconf zstd lz4 xxhash libxmlsec1 uv
 
 .. include:: steps/install-system-server.rst
 
@@ -38,6 +24,9 @@ Make sure pip will be able to find the ``libffi`` version provided by homebrew
 
     # Database server: PostgreSQL
     brew install postgresql
+
+    # Gettext for the msgmerge add-on
+    brew install gettext
 
 .. include:: steps/install-python.rst
 

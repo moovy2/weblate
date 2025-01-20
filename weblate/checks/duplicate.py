@@ -1,30 +1,21 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from django.utils.html import format_html
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy
 
 from weblate.checks.base import TargetCheck
 from weblate.checks.data import NON_WORD_CHARS
-from weblate.checks.same import strip_format
+from weblate.checks.same import replace_format_placeholder, strip_format
+
+if TYPE_CHECKING:
+    from weblate.trans.models import Unit
 
 # Regexp for non word chars
 NON_WORD = re.compile("[{}\\]]+".format("".join(NON_WORD_CHARS)))
@@ -34,7 +25,7 @@ IGNORES = {
     "fy": {"jo", "mei"},
     "fr": {"vous", "nous"},
     "hi": {"कर"},
-    "tr": {"tek"},
+    "tr": {"tek", "adım", "gıcır", "sık"},
     "sq": {"të"},
 }
 
@@ -43,40 +34,46 @@ class DuplicateCheck(TargetCheck):
     """Check for duplicated tokens."""
 
     check_id = "duplicate"
-    name = _("Consecutive duplicated words")
-    description = _("Text contains the same word twice in a row:")
+    name = gettext_lazy("Consecutive duplicated words")
+    description = gettext_lazy("Text contains the same word twice in a row:")
 
-    def extract_groups(self, text: str, language_code: str):
+    def extract_groups(
+        self, text: str, language_code: str
+    ) -> tuple[list[int], list[str]]:
         previous = None
         group = 1
-        groups = []
-        words = []
-        ignored = IGNORES.get(language_code, {})
+        groups: list[int] = []
+        words: list[str] = []
+        ignored = IGNORES.get(language_code, set())
         for word in NON_WORD.split(text):
             if not word:
                 continue
             if word not in ignored and len(word) >= 2 and previous == word:
                 group += 1
-            elif group > 1:
+            elif group > 1 and previous is not None:
                 groups.append(group)
                 words.append(previous)
                 group = 1
             previous = word
-        if group > 1:
+        if group > 1 and previous is not None:
             groups.append(group)
             words.append(previous)
         return groups, words
 
-    def check_single(self, source, target, unit):
+    def check_single(self, source: str, target: str, unit: Unit):
         source_code = unit.translation.component.source_language.base_code
         lang_code = unit.translation.language.base_code
 
         source_groups, source_words = self.extract_groups(
-            strip_format(source, unit.all_flags),
+            strip_format(
+                source, unit.all_flags, replacement=replace_format_placeholder
+            ),
             source_code,
         )
         target_groups, target_words = self.extract_groups(
-            strip_format(target, unit.all_flags),
+            strip_format(
+                target, unit.all_flags, replacement=replace_format_placeholder
+            ),
             lang_code,
         )
 

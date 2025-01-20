@@ -1,40 +1,37 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from django.apps import AppConfig
-from django.core.checks import Warning, register
+from django.core.checks import CheckMessage, register
+from django.core.checks import Warning as DjangoWarning
 from django.db.models.signals import post_migrate
 
 import weblate.vcs.gpg
 from weblate.utils.checks import weblate_check
 from weblate.utils.data import data_dir
 from weblate.utils.lock import WeblateLock
-from weblate.vcs.base import RepositoryException
+from weblate.vcs.base import RepositoryError
 from weblate.vcs.git import GitRepository, SubversionRepository
 from weblate.vcs.ssh import ensure_ssh_key
 
-GIT_ERRORS = []
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
+GIT_ERRORS: list[str] = []
 
 
-def check_gpg(app_configs, **kwargs):
+@register(deploy=True)
+def check_gpg(
+    *,
+    app_configs: Sequence[AppConfig] | None,
+    databases: Sequence[str] | None,
+    **kwargs,
+) -> Iterable[CheckMessage]:
     from weblate.vcs.gpg import get_gpg_public_key
 
     get_gpg_public_key()
@@ -45,23 +42,53 @@ def check_gpg(app_configs, **kwargs):
     ]
 
 
-def check_vcs(app_configs, **kwargs):
+@register
+def check_vcs(
+    *,
+    app_configs: Sequence[AppConfig] | None,
+    databases: Sequence[str] | None,
+    **kwargs,
+) -> Iterable[CheckMessage]:
     from weblate.vcs.models import VCS_REGISTRY
 
     message = "Failure in loading VCS module for {}: {}"
     return [
         weblate_check(
-            f"weblate.W033.{key}", message.format(key, value.strip()), Warning
+            f"weblate.W033.{key}",
+            message.format(key, str(value).strip()),
+            DjangoWarning,
         )
         for key, value in VCS_REGISTRY.errors.items()
     ]
 
 
-def check_git(app_configs, **kwargs):
+@register(deploy=True)
+def check_git(
+    *,
+    app_configs: Sequence[AppConfig] | None,
+    databases: Sequence[str] | None,
+    **kwargs,
+) -> Iterable[CheckMessage]:
     template = "Failure in configuring Git: {}"
     return [
         weblate_check("weblate.C035", template.format(message))
         for message in GIT_ERRORS
+    ]
+
+
+@register
+def check_vcs_credentials(
+    *,
+    app_configs: Sequence[AppConfig] | None,
+    databases: Sequence[str] | None,
+    **kwargs,
+) -> Iterable[CheckMessage]:
+    from weblate.vcs.models import VCS_REGISTRY
+
+    return [
+        weblate_check("weblate.C040", error)
+        for instance in VCS_REGISTRY.values()
+        for error in instance.validate_configuration()
     ]
 
 
@@ -70,21 +97,16 @@ class VCSConfig(AppConfig):
     label = "vcs"
     verbose_name = "VCS"
 
-    def ready(self):
+    def ready(self) -> None:
         super().ready()
-        register(check_vcs)
-        register(check_git, deploy=True)
-        register(check_gpg, deploy=True)
-
-        home = data_dir("home")
-        if not os.path.exists(home):
-            os.makedirs(home)
-
         post_migrate.connect(self.post_migrate, sender=self)
 
-    def post_migrate(self, sender, **kwargs):
+    def post_migrate(self, sender: AppConfig, **kwargs) -> None:
         ensure_ssh_key()
         home = data_dir("home")
+
+        if not os.path.exists(home):
+            os.makedirs(home)
 
         # Configure merge driver for Gettext PO
         # We need to do this behind lock to avoid errors when servers
@@ -95,12 +117,12 @@ class VCSConfig(AppConfig):
         with lockfile:
             try:
                 GitRepository.global_setup()
-            except RepositoryException as error:
+            except RepositoryError as error:
                 GIT_ERRORS.append(str(error))
             if SubversionRepository.is_supported():
                 try:
                     SubversionRepository.global_setup()
-                except RepositoryException as error:
+                except RepositoryError as error:
                     GIT_ERRORS.append(str(error))
 
         # Use it for *.po by default

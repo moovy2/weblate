@@ -1,21 +1,9 @@
+# Copyright © Michal Čihař <michal@weblate.org>
 #
-# Copyright © 2012–2022 Michal Čihař <michal@cihar.com>
-#
-# This file is part of Weblate <https://weblate.org/>
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-#
+# SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.core.cache import cache
@@ -25,7 +13,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import translation
 from django.utils.html import format_html
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext
 from django.views.decorators.cache import never_cache
 
 from weblate.accounts.models import Profile
@@ -33,7 +21,7 @@ from weblate.lang.models import Language
 from weblate.metrics.models import Metric
 from weblate.trans.forms import ReportsForm, SearchForm
 from weblate.trans.models import Component, ComponentList, Project, Translation
-from weblate.trans.models.component import prefetch_tasks
+from weblate.trans.models.component import translation_prefetch_tasks
 from weblate.trans.models.project import prefetch_project_flags
 from weblate.trans.models.translation import GhostTranslation
 from weblate.trans.util import render
@@ -41,10 +29,8 @@ from weblate.utils import messages
 from weblate.utils.stats import prefetch_stats
 from weblate.utils.views import get_paginator
 
-
-def translation_prefetch_tasks(translations):
-    prefetch_tasks([translation.component for translation in translations])
-    return translations
+if TYPE_CHECKING:
+    from weblate.auth.models import AuthenticatedHttpRequest, User
 
 
 def get_untranslated(base, limit=None):
@@ -58,13 +44,13 @@ def get_untranslated(base, limit=None):
     return result
 
 
-def get_suggestions(request, user, user_has_languages, base, filtered=False):
+def get_suggestions(user: User, user_has_languages: bool, base, filtered=False):
     """Return suggested translations for user."""
     if not filtered:
         non_alerts = base.annotate(alert_count=Count("component__alert__pk")).filter(
             alert_count=0
         )
-        result = get_suggestions(request, user, user_has_languages, non_alerts, True)
+        result = get_suggestions(user, user_has_languages, non_alerts, True)
         if result:
             return result
     if user_has_languages:
@@ -80,8 +66,11 @@ def get_suggestions(request, user, user_has_languages, base, filtered=False):
     return get_untranslated(prefetch_stats(base), 10)
 
 
-def guess_user_language(request, translations):
-    """Guess user language for translations.
+def guess_user_language(
+    request: AuthenticatedHttpRequest, translations
+) -> Language | None:
+    """
+    Guess user language for translations.
 
     It tries following:
 
@@ -98,9 +87,8 @@ def guess_user_language(request, translations):
             pass
 
     # Try getting from Accept-Language
-    language = Language.objects.get_request_language(request)
-    if language is not None:
-        return language
+    if request.accepted_language:
+        return request.accepted_language
 
     # Random language from existing translations, we do not want to list all
     # languages by default
@@ -111,8 +99,11 @@ def guess_user_language(request, translations):
         return None
 
 
-def get_user_translations(request, user, user_has_languages):
-    """Get list of translations in user languages.
+def get_user_translations(
+    request: AuthenticatedHttpRequest, user: User, user_has_languages: bool
+):
+    """
+    Get list of translations in user languages.
 
     Works also for anonymous users based on current UI language.
     """
@@ -129,16 +120,18 @@ def get_user_translations(request, user, user_has_languages):
     return result
 
 
-def redirect_single_project(user):
+def redirect_single_project(user: User):
+    target: Component | Project
     if isinstance(settings.SINGLE_PROJECT, str):
         target = project = Project.objects.get(slug=settings.SINGLE_PROJECT)
     elif Component.objects.filter(is_glossary=False).count() == 1:
-        target = Component.objects.filter(is_glossary=False).get()
-        project = target.project
+        target = component = Component.objects.filter(is_glossary=False).get()
+        project = component.project
     elif Project.objects.count() == 1:
         target = project = Project.objects.get()
     else:
-        raise ImproperlyConfigured("SINGLE_PROJECT enabled, but no project found")
+        msg = "SINGLE_PROJECT enabled, but no project found"
+        raise ImproperlyConfigured(msg)
 
     if not user.is_authenticated and not user.can_access_project(project):
         return redirect(f"{settings.LOGIN_URL}?next={target.get_absolute_url()}")
@@ -146,7 +139,7 @@ def redirect_single_project(user):
 
 
 @never_cache
-def home(request):
+def home(request: AuthenticatedHttpRequest):
     """Home page handler serving different views based on user."""
     user = request.user
 
@@ -155,7 +148,7 @@ def home(request):
     if "removed" in request.GET:
         messages.warning(
             request,
-            _(
+            gettext(
                 "The project you were looking for has been removed, "
                 "however you are welcome to contribute to other ones."
             ),
@@ -164,7 +157,7 @@ def home(request):
     if "show_set_password" in request.session:
         messages.warning(
             request,
-            _(
+            gettext(
                 "You have activated your account, now you should set "
                 "the password to be able to sign in next time."
             ),
@@ -179,7 +172,7 @@ def home(request):
             format_html(
                 '<a href="{}">{}</a>',
                 reverse("profile") + "#account",
-                _("Please set your full name and e-mail in your profile."),
+                gettext("Please set your full name and e-mail in your profile."),
             ),
         )
 
@@ -193,11 +186,11 @@ def home(request):
     return dashboard_user(request)
 
 
-def fetch_componentlists(user, user_translations):
+def fetch_componentlists(user: User, user_translations):
     componentlists = list(
         ComponentList.objects.filter(
             show_dashboard=True,
-            components__project_id__in=user.allowed_project_ids,
+            components__project__in=user.allowed_projects,
         )
         .distinct()
         .order()
@@ -233,7 +226,7 @@ def fetch_componentlists(user, user_translations):
     return [c for c in componentlists if c.translations]
 
 
-def dashboard_user(request):
+def dashboard_user(request: AuthenticatedHttpRequest):
     """Home page of Weblate for authenticated user."""
     user = request.user
 
@@ -241,7 +234,7 @@ def dashboard_user(request):
 
     user_translations = get_user_translations(request, user, user_has_languages)
 
-    suggestions = get_suggestions(request, user, user_has_languages, user_translations)
+    suggestions = get_suggestions(user, user_has_languages, user_translations)
 
     usersubscriptions = None
 
@@ -271,6 +264,9 @@ def dashboard_user(request):
 
         usersubscriptions = get_paginator(request, usersubscriptions)
         usersubscriptions = translation_prefetch_tasks(usersubscriptions)
+        owned = user.owned_projects.order()
+    else:
+        owned = Project.objects.none()
 
     return render(
         request,
@@ -283,21 +279,26 @@ def dashboard_user(request):
             "componentlists": componentlists,
             "all_componentlists": prefetch_stats(
                 ComponentList.objects.filter(
-                    components__project_id__in=request.user.allowed_project_ids
+                    components__project__in=request.user.allowed_projects
                 )
                 .distinct()
                 .order()
             ),
             "active_tab_slug": active_tab_slug,
-            "reports_form": ReportsForm(),
+            "reports_form": ReportsForm({}),
+            "all_owned_projects": owned,
+            "owned_projects": prefetch_project_flags(prefetch_stats(owned[:10])),
         },
     )
 
 
-def dashboard_anonymous(request):
+def dashboard_anonymous(request: AuthenticatedHttpRequest):
     """Home page of Weblate showing list of projects for anonymous user."""
-    top_project_ids = cache.get("dashboard-anonymous-projects")
-    if top_project_ids is None:
+    top_project_ids_cache = cache.get("dashboard-anonymous-projects")
+    if top_project_ids_cache is not None:
+        # hiredis-py 3 makes list from set
+        top_project_ids = set(top_project_ids_cache)
+    else:
         top_projects = sorted(
             prefetch_stats(request.user.allowed_projects),
             key=lambda prj: -prj.stats.monthly_changes,
@@ -311,8 +312,8 @@ def dashboard_anonymous(request):
         "dashboard/anonymous.html",
         {
             "top_projects": prefetch_stats(prefetch_project_flags(top_projects)),
-            "all_projects": Metric.objects.get_current(
-                None, Metric.SCOPE_GLOBAL, 0, name="projects"
-            )["projects"],
+            "all_projects": Metric.objects.get_current_metric(
+                None, Metric.SCOPE_GLOBAL, 0
+            )["public_projects"],
         },
     )
