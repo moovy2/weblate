@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: Weblate 5.11\n"
 "Report-Msgid-Bugs-To: https://github.com/WeblateOrg/weblate/issues\n"
 "POT-Creation-Date: 2025-04-14 18:25+0000\n"
-"PO-Revision-Date: 2025-04-27 00:59+0000\n"
+"PO-Revision-Date: 2025-05-09 01:03+0000\n"
 "Last-Translator: RViktor <rviktor@ivankapal.com>\n"
 "Language-Team: Hungarian <https://hosted.weblate.org/projects/weblate/"
 "application/hu/>\n"
@@ -1856,7 +1856,7 @@ msgstr ""
 
 #: weblate/addons/generate.py:134
 msgid "Pseudolocale generation"
-msgstr "Álnyelvi (pseudolocale) generálás"
+msgstr "Szimulált nyelv generálás"
 
 #: weblate/addons/generate.py:136
 msgid ""
@@ -2076,16 +2076,15 @@ msgstr ""
 
 #: weblate/api/docs.py:72
 msgid "Allowed number of requests to perform"
-msgstr "Végrehajtandó kérések engedélyezett száma"
+msgstr "Az engedélyezett kérések száma"
 
 #: weblate/api/docs.py:77
 msgid "Remaining number of requests to perform"
-msgstr "Végrehajtandó kérések hátralévő száma"
+msgstr "A fennmaradó kérések száma"
 
 #: weblate/api/docs.py:82
 msgid "Number of seconds until the rate-limit window resets"
-msgstr ""
-"A sebességkorlátozás ablakának visszaállításáig hátralévő másodpercek száma"
+msgstr "Másodpercek száma a korlátozási ablak visszaállásáig"
 
 #: weblate/api/spectacular.py:59
 #: weblate/templates/drf_spectacular/redoc.html:11
@@ -4770,7 +4769,7 @@ msgstr "Metaadatfájlokkal rendelkező könyvtárnak kell lennie!"
 
 #: weblate/formats/txt.py:196
 msgid "App store metadata files"
-msgstr "App store metaadatfájlok"
+msgstr "App Store metaadat fájlok"
 
 #: weblate/glossary/apps.py:12
 msgid "Glossaries"
@@ -7449,7 +7448,7 @@ msgstr "Összetevő neve"
 
 #: weblate/templates/addons/generate_help.html:87
 msgid "Component URL slug"
-msgstr "Összetevő keresőbarát URL-e"
+msgstr "Összetevő URL-azonosítója (slug)"
 
 #: weblate/templates/addons/generate_help.html:97
 #: weblate/trans/models/project.py:165
@@ -7458,7 +7457,7 @@ msgstr "Projekt neve"
 
 #: weblate/templates/addons/generate_help.html:107
 msgid "Project URL slug"
-msgstr "Projekt keresőbarát URL-e"
+msgstr "Projekt URL-azonosítója (slug)"
 
 #: weblate/templates/addons/pseudolocale.html:4
 msgid "Generated strings"
@@ -7477,7 +7476,7 @@ msgstr "A szövegek a következő minta alapján generálódnak:"
 #: weblate/templates/translate.html:97 weblate/trans/forms.py:2505
 #: weblate/utils/views.py:204
 msgid "Source string"
-msgstr "Forrásszöveg"
+msgstr "A forrásszöveg"
 
 #: weblate/templates/addons/squash_help.html:3
 msgid ""
@@ -8256,7 +8255,7 @@ msgstr "Előállítás"
 #: weblate/templates/category.html:338 weblate/templates/component.html:394
 #: weblate/templates/dashboard/user.html:161 weblate/templates/project.html:421
 msgid "Contributor stats"
-msgstr "Közreműködő statisztikái"
+msgstr "Közreműködői statisztikák"
 
 #: weblate/templates/category.html:342 weblate/templates/component.html:398
 #: weblate/templates/dashboard/user.html:165 weblate/templates/project.html:425
@@ -8351,7 +8350,7 @@ msgstr "Az összetevő kettőzése"
 #: weblate/templates/component.html:159 weblate/templates/guide.html:11
 #: weblate/templates/guide.html:29
 msgid "Community localization checklist"
-msgstr "Közösségi honosítási ellenőrzőlista"
+msgstr "Közösségi lokalizálási ellenőrzőlista"
 
 #: weblate/templates/component.html:202 weblate/templates/manage/alerts.html:30
 msgid "dismissed"
@@ -8496,7 +8495,7 @@ msgstr ""
 
 #: weblate/templates/data.html:22
 msgid "RSS feeds"
-msgstr "RSS hírforrások"
+msgstr "RSS-csatornák"
 
 #: weblate/templates/data.html:26
 msgid ""
@@ -8537,7 +8536,7 @@ msgstr "Egy összetevőben lévő összes fordítás statisztikáját így kérh
 
 #: weblate/templates/data.html:104
 msgid "Notification hooks"
-msgstr "Értesítési horgok"
+msgstr "Értesítési hookok"
 
 #: weblate/templates/data.html:109
 msgid ""
@@ -14020,8 +14019,8 @@ msgid ""
 "Turn on contribution to shared translation memory for the project to get "
 "access to additional components."
 msgstr ""
-"A megosztott fordítási memórián történő közreműködés bekapcsolása a "
-"projektnél, hogy hozzáférést kapjon a további összetevőkhöz."
+"Hozzájárulás bekapcsolása a megosztott fordítási memóriához a projekt "
+"számára, hogy hozzáférhessen további összetevőkhöz."
 
 #: weblate/trans/forms.py:935
 msgid "Machine translation engines"
@@ -14568,7 +14567,7 @@ msgstr "Nem sikerült futtatni a kiegészítőt."
 #. Translators: Name of an alert
 #: weblate/trans/models/alert.py:451
 msgid "Misconfigured monolingual translation."
-msgstr "Helytelenül beállított egynyelvű fordítás."
+msgstr "Hibásan beállított egynyelvű fordítás."
 
 #. Translators: Name of an alert
 #: weblate/trans/models/alert.py:491

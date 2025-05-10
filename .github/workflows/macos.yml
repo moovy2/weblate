@@ -33,6 +33,7 @@ jobs:
         persist-credentials: false
     - run: brew update
     - run: brew uninstall openssl@1.1
+    - run: brew uninstall python@3.12
     - run: brew untap homebrew/cask
     - run: brew untap homebrew/core
     - run: brew untap aws/tap
@@ -58,7 +59,7 @@ jobs:
       run: |
         uv venv --python python3.13 .venv
         source .venv/bin/activate
-        uv sync --no-sources --frozen --all-extras --dev --no-binary-package lxml --no-binary-package xmlsec
+        uv sync --frozen --all-extras --dev --no-binary-package lxml --no-binary-package xmlsec
     - name: Test with Django
       run: |
         # shellcheck disable=SC2155

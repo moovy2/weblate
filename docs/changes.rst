@@ -5,9 +5,17 @@ Weblate 5.12
 
 .. rubric:: New features
 
+* Added :http:post:`/api/units/(int:id)/comments/` to create a new comment for the given translation unit.
+
 .. rubric:: Improvements
 
+* :ref:`check-same` is now skipped for Toki Pona.
+* :ref:`search-strings` supports ``has:location`` lookup.
+* Unicode whitespaces are now considered as problematic characters for :ref:`glossary`, see :ref:`check-prohibited-initial-character`.
+
 .. rubric:: Bug fixes
+
+* :ref:`dashboard` translations ordering when paginating.
 
 .. rubric:: Compatibility
 
@@ -20,6 +28,75 @@ Please follow :ref:`generic-upgrade-instructions` in order to perform update.
 .. include:: changes/contributors/5.12.rst
 
 `All changes in detail <https://github.com/WeblateOrg/weblate/milestone/141?closed=1>`__.
+
+Weblate 5.11.4
+--------------
+
+*Released on May 7th 2025.*
+
+.. rubric:: Improvements
+
+* :ref:`addon-weblate.webhook.webhook` logs requests and responses.
+
+.. rubric:: Bug fixes
+
+* :ref:`addon-weblate.webhook.webhook` was not triggered in some situations.
+
+.. rubric:: Upgrading
+
+Please follow :ref:`generic-upgrade-instructions` in order to perform update.
+
+.. rubric:: Contributors
+
+.. include:: changes/contributors/5.11.4.rst
+
+`All changes in detail <https://github.com/WeblateOrg/weblate/milestone/146?closed=1>`__.
+
+Weblate 5.11.3
+--------------
+
+*Released on May 3rd 2025.*
+
+.. rubric:: Bug fixes
+
+* Fixed release publishing.
+
+.. rubric:: Upgrading
+
+Please follow :ref:`generic-upgrade-instructions` in order to perform update.
+
+.. rubric:: Contributors
+
+.. include:: changes/contributors/5.11.3.rst
+
+`All changes in detail <https://github.com/WeblateOrg/weblate/milestone/145?closed=1>`__.
+
+Weblate 5.11.2
+--------------
+
+*Released on May 3rd 2025.*
+
+.. rubric:: Improvements
+
+* Glossary performance in zen mode and automatic suggestions.
+* Extended supported formats for :ref:`addon-weblate.json.customize`.
+
+.. rubric:: Bug fixes
+
+* XML export no longer crashes on locations with special characters.
+* Improved error handling on ZIP upload.
+* Django 5.2 compatibility.
+* Avoid repeated glossary synchronizations.
+
+.. rubric:: Upgrading
+
+Please follow :ref:`generic-upgrade-instructions` in order to perform update.
+
+.. rubric:: Contributors
+
+.. include:: changes/contributors/5.11.2.rst
+
+`All changes in detail <https://github.com/WeblateOrg/weblate/milestone/144?closed=1>`__.
 
 Weblate 5.11.1
 --------------
