@@ -11,13 +11,16 @@
 # Michal Čihař <michal@weblate.org>, 2025.
 # Mohammed Al Otaibi <mopes.03.belle@icloud.com>, 2025.
 # Basheer Radman <ba2014sheer@gmail.com>, 2025.
+# abdelbasset jabrane <ribago9317@cubene.com>, 2025.
+# abdelbasset jabrane <naminio201@users.noreply.hosted.weblate.org>, 2025.
 msgid ""
 msgstr ""
 "Project-Id-Version: Weblate 5.11\n"
 "Report-Msgid-Bugs-To: https://github.com/WeblateOrg/weblate/issues\n"
 "POT-Creation-Date: 2025-04-14 20:26+0200\n"
-"PO-Revision-Date: 2025-04-15 11:47+0000\n"
-"Last-Translator: Fill read-only add-on <noreply-addon-fill@weblate.org>\n"
+"PO-Revision-Date: 2025-05-15 01:16+0000\n"
+"Last-Translator: abdelbasset jabrane "
+"<naminio201@users.noreply.hosted.weblate.org>\n"
 "Language-Team: Arabic <https://hosted.weblate.org/projects/weblate/"
 "documentation/ar/>\n"
 "Language: ar\n"
@@ -26,7 +29,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
 "&& n%100<=10 ? 3 : n%100>=11 ? 4 : 5;\n"
-"X-Generator: Weblate 5.11-dev\n"
+"X-Generator: Weblate 5.12-dev\n"
 "Generated-By: Babel 2.8.0\n"
 
 #: ../../admin/access.rst:4 ../../admin/projects.rst:197
@@ -775,6 +778,10 @@ msgid ""
 "permissions is granted for all the projects these components are in. :"
 "guilabel:`Components` and :guilabel:`Projects` are ignored."
 msgstr ""
+"إذا حدد الفريق أي :guilabel:`قائمة مكونات`، فإن جميع الأذونات الممنوحة "
+"لأعضاء ذلك الفريق تُمنح لجميع المكونات في قوائم المكونات المرتبطة بالفريق، "
+"ويتم منح وصول بدون أذونات إضافية لجميع المشاريع التي تتواجد فيها هذه "
+"المكونات. يتم تجاهل :guilabel:`المكونات` و :guilabel:`المشاريع`."
 
 #: ../../admin/access.rst:388
 msgid ""
@@ -798,6 +805,11 @@ msgid ""
 "applied to all the projects, which effectively grants the same permissions "
 "to access all projects :ref:`unrestricted components <component-restricted>`."
 msgstr ""
+"بخلاف ذلك، إذا حدد الفريق أي :guilabel:`مشاريع`، إما عن طريق إدراجها مباشرة "
+"أو من خلال تعيين :guilabel:`اختيار المشاريع` إلى قيمة مثل :guilabel:`جميع "
+"المشاريع العامة`، فإن جميع تلك الأذونات تُطبق على جميع المشاريع، مما يمنح فعليً"
+"ا نفس الأذونات للوصول إلى جميع المشاريع :ref:`المكونات غير المقيدة "
+"<component-restricted>`."
 
 #: ../../admin/access.rst:402
 msgid ""
@@ -2022,10 +2034,8 @@ msgid "Component update"
 msgstr "اسم المكون"
 
 #: ../../admin/addons.rst:32
-#, fuzzy
-#| msgid "Add new translation component"
 msgid "Triggered whenever a change happens in a component such as:"
-msgstr "إضافة عنصر جديد للترجمة"
+msgstr "يتم تفعيله كلما حدث تغيير في مكون مثل:"
 
 #: ../../admin/addons.rst:34
 #, fuzzy
@@ -2232,10 +2242,8 @@ msgstr "الترجمة الآلية"
 #: ../../admin/machine.rst:761 ../../admin/machine.rst:810
 #: ../../admin/machine.rst:834 ../../admin/machine.rst:914
 #: ../../admin/machine.rst:944 ../../admin/machine.rst:972
-#, fuzzy
-#| msgid "Available addons"
 msgid "Available choices:"
-msgstr "الإضافات المُتاحة"
+msgstr "الخيارات المتاحة:"
 
 #: ../../admin/addons.rst:137
 #, fuzzy
@@ -2774,10 +2782,9 @@ msgid ""
 msgstr ""
 
 #: ../../admin/addons.rst:332
-#, fuzzy
-#| msgid "You can use Django templates markup in the commit messages."
 msgid "You can use Django template markup in all filename fields, for example:"
-msgstr "يمكنك استخدام ترميز قوالب Django في رسائل الالتزام."
+msgstr ""
+"يمكنك استخدام ترميز قوالب Django في جميع حقول أسماء الملفات، على سبيل المثال:"
 
 #: ../../admin/addons.rst:334
 msgid "``{{ component }}``"
@@ -2831,10 +2838,8 @@ msgstr "مجلد واحد لكل لغة يحتوي على ملفات ترجمة 
 #: ../../admin/addons.rst:354 ../../admin/addons.rst:367
 #: ../../admin/addons.rst:380 ../../admin/addons.rst:393
 #: ../../admin/addons.rst:407 ../../admin/addons.rst:420
-#, fuzzy
-#| msgid "Regular expression"
 msgid "Regular expression:"
-msgstr "تعبير عادي"
+msgstr "تعبير عادي:"
 
 #: ../../admin/addons.rst:355
 msgid "``(?P<language>[^/.]*)/(?P<component>[^/]*)\\.po``"
@@ -2843,10 +2848,8 @@ msgstr "``(?P<language>[^/.]*)/(?P<component>[^/]*)\\.po``"
 #: ../../admin/addons.rst:356 ../../admin/addons.rst:369
 #: ../../admin/addons.rst:382 ../../admin/addons.rst:395
 #: ../../admin/addons.rst:409 ../../admin/addons.rst:424
-#, fuzzy
-#| msgid "Matched files"
 msgid "Matching files:"
-msgstr "الملفات المطابقة"
+msgstr "الملفات المطابقة:"
 
 #: ../../admin/addons.rst:357
 msgid ":file:`cs/application.po`"
@@ -3004,10 +3007,8 @@ msgstr ""
 "ApplicationResources_(?P<language>[^/.]*)\\.properties``"
 
 #: ../../admin/addons.rst:422
-#, fuzzy
-#| msgid "Component name"
 msgid "Component name:"
-msgstr "اسم المكون"
+msgstr "اسم المكون:"
 
 #: ../../admin/addons.rst:423
 msgid "``{{ originalHierarchy }}: {{ component }}``"
@@ -3335,10 +3336,8 @@ msgid ""
 msgstr ""
 
 #: ../../admin/addons.rst:597
-#, fuzzy
-#| msgid "Define the base file for new translations"
 msgid "For example generating a summary file for each translation:"
-msgstr "تحديد الملف القاعدي للترجمات الجديدة"
+msgstr "على سبيل المثال، إنشاء ملف ملخص لكل ترجمة:"
 
 #: ../../admin/addons.rst:600
 msgid "``locale/{{ language_code }}.json``"
@@ -5833,10 +5832,8 @@ msgid ""
 msgstr ""
 
 #: ../../admin/auth.rst:784
-#, fuzzy
-#| msgid "Weblate support status"
 msgid "Weblate supports the following second factors:"
-msgstr "حالة دعم Weblate"
+msgstr "يدعم Weblate العوامل الثانية التالية:"
 
 #: ../../admin/auth.rst:786
 msgid "Security keys (WebAuthn)"
@@ -27060,10 +27057,8 @@ msgid "Weblate 5.8"
 msgstr "مفاتيح وِيبلايت"
 
 #: ../../changes.rst:426
-#, fuzzy
-#| msgid "Component name"
 msgid "Added :ref:`component-key_filter` in the component."
-msgstr "اسم المكون"
+msgstr "تمت إضافة :ref:`component-key_filter` إلى المكون."
 
 #: ../../changes.rst:427
 msgid ""
@@ -27245,7 +27240,7 @@ msgstr ""
 msgid ""
 "Updated language names to better describe different scripts and Sintic "
 "languages."
-msgstr ""
+msgstr "تم تحديث أسماء اللغات لوصف مختلف الكتابات واللغات الصينية بشكل أفضل."
 
 #: ../../changes.rst:504
 msgid ""
@@ -43898,7 +43893,7 @@ msgstr ""
 
 #: ../../formats/android.rst:4
 msgid "Android string resources"
-msgstr ""
+msgstr "موارد سلاسل أندرويد"
 
 #: ../../formats/android.rst:10
 msgid "Android specific file format for translating applications."
@@ -44049,7 +44044,7 @@ msgstr "``commonMain/composeResources/values/strings.xml``"
 
 #: ../../formats/apple.rst:4
 msgid "Apple iOS strings"
-msgstr ""
+msgstr "سلاسل أبل آي أو إس"
 
 #: ../../formats/apple.rst:9
 msgid ""
@@ -44114,7 +44109,7 @@ msgstr ""
 
 #: ../../formats/appstore.rst:4
 msgid "App store metadata files"
-msgstr ""
+msgstr "ملفات البيانات الوصفية لمتجر التطبيقات"
 
 #: ../../formats/appstore.rst:6
 msgid ""
@@ -44197,7 +44192,7 @@ msgstr ""
 
 #: ../../formats/csv.rst:4
 msgid "CSV files"
-msgstr ""
+msgstr "ملفات CSV"
 
 #: ../../formats/csv.rst:10
 msgid ""
@@ -44314,7 +44309,7 @@ msgstr "ملف CSV بسيط"
 
 #: ../../formats/dtd.rst:4
 msgid "DTD files"
-msgstr ""
+msgstr "ملفات DTD"
 
 #: ../../formats/dtd.rst:9
 msgid ":doc:`tt:formats/dtd`"
@@ -44338,7 +44333,7 @@ msgstr ""
 
 #: ../../formats/excel.rst:4
 msgid "Excel Open XML"
-msgstr ""
+msgstr "إكسيل افتح XML"
 
 #: ../../formats/excel.rst:6
 msgid "Excel Open XML (.xlsx) files can be imported and exported."
@@ -44369,7 +44364,7 @@ msgstr ""
 
 #: ../../formats/flatxml.rst:4
 msgid "Flat XML files"
-msgstr ""
+msgstr "ملفات XML مسطحة"
 
 #: ../../formats/flatxml.rst:9
 msgid ":doc:`tt:formats/flatxml`"
@@ -44392,10 +44387,8 @@ msgid "`Flat XML file`"
 msgstr ""
 
 #: ../../formats/fluent.rst:4
-#, fuzzy
-#| msgid "File format"
 msgid "Fluent format"
-msgstr "نُسق الملف"
+msgstr "تنسيق سلس"
 
 #: ../../snippets/format-in-development.rst:3
 msgid ""
@@ -44560,7 +44553,7 @@ msgstr ""
 
 #: ../../formats/go-i18n.rst:4
 msgid "go-i18n JSON files"
-msgstr ""
+msgstr "ملفات go-i18n JSON"
 
 #: ../../formats/go-i18n.rst:13
 msgid "Support for v2 variant of this format was added."
@@ -44628,10 +44621,8 @@ msgid "`go-i18n v2 JSON file`"
 msgstr "ملف JSON i18next"
 
 #: ../../formats/gotext.rst:4
-#, fuzzy
-#| msgid "gettext PO file"
 msgid "gotext JSON files"
-msgstr "ملف Gettext PO"
+msgstr "ملفات gotext JSON"
 
 #: ../../formats/gotext.rst:11
 msgid ""
@@ -44662,8 +44653,6 @@ msgid "`gotext JSON file`"
 msgstr "ملف Gettext PO"
 
 #: ../../formats/gwt.rst:4
-#, fuzzy
-#| msgid "GWT Properties"
 msgid "GWT properties"
 msgstr "خصائص GWT"
 
@@ -44698,7 +44687,7 @@ msgstr ""
 
 #: ../../formats/html.rst:4
 msgid "HTML files"
-msgstr ""
+msgstr "ملفات HTML"
 
 #: ../../formats/html.rst:8
 msgid ""
@@ -44732,10 +44721,8 @@ msgid "`HTML file`"
 msgstr "ملف YAML"
 
 #: ../../formats/i18next.rst:4
-#, fuzzy
-#| msgid "i18next JSON file"
 msgid "i18next JSON files"
-msgstr "ملف JSON i18next"
+msgstr "ملفات i18next JSON"
 
 #: ../../formats/i18next.rst:11
 msgid "Support for v4 variant of this format was added."
@@ -44803,7 +44790,7 @@ msgstr "ملف JSON i18next"
 
 #: ../../formats/idml.rst:4
 msgid "IDML Format"
-msgstr ""
+msgstr "تنسيق IDML"
 
 #: ../../formats/idml.rst:10
 msgid ""
@@ -44827,7 +44814,7 @@ msgstr "ملف YAML"
 
 #: ../../formats/ini.rst:4
 msgid "INI translations"
-msgstr ""
+msgstr "ترجمات INI"
 
 #: ../../formats/ini.rst:11
 msgid ""
@@ -44869,10 +44856,8 @@ msgid "`INI File`"
 msgstr ""
 
 #: ../../formats/innosetup.rst:4
-#, fuzzy
-#| msgid "Import existing translations"
 msgid "Inno Setup INI translations"
-msgstr "استورد ترجمات موجودة"
+msgstr "ترجمات Inno Setup INI"
 
 #: ../../formats/innosetup.rst:11
 #, fuzzy
@@ -44917,7 +44902,7 @@ msgstr ""
 
 #: ../../formats/java.rst:5
 msgid "Java properties"
-msgstr ""
+msgstr "خصائص جافا"
 
 #: ../../formats/java.rst:10
 msgid "Native Java format for translations."
@@ -44956,7 +44941,7 @@ msgstr ""
 
 #: ../../formats/joomla.rst:4
 msgid "Joomla translations"
-msgstr ""
+msgstr "ترجمات Joomla"
 
 #: ../../formats/joomla.rst:9
 msgid "Native Joomla format for translations."
@@ -44984,7 +44969,7 @@ msgstr ""
 
 #: ../../formats/json.rst:4
 msgid "JSON files"
-msgstr ""
+msgstr "ملفات JSON"
 
 #: ../../formats/json.rst:11
 msgid ""
@@ -45057,10 +45042,8 @@ msgid "`JSON nested structure file`"
 msgstr ""
 
 #: ../../formats/laravel.rst:4
-#, fuzzy
-#| msgid "PHP strings"
 msgid "Laravel PHP strings"
-msgstr "سلاسل PHP"
+msgstr "سلاسل Laravel PHP"
 
 #: ../../formats/laravel.rst:8
 msgid "The Laravel PHP localization files are supported as well with plurals:"
@@ -45086,10 +45069,8 @@ msgid "`Laravel PHP strings`"
 msgstr "سلاسل PHP"
 
 #: ../../formats/markdown.rst:4
-#, fuzzy
-#| msgid "Markdown text"
 msgid "Markdown files"
-msgstr "شيفرة ماركداون"
+msgstr "ملفات Markdown"
 
 #: ../../formats/markdown.rst:10
 msgid ""
@@ -45153,10 +45134,8 @@ msgid "`draggabble/i18n lang file`"
 msgstr "ملف فاشل"
 
 #: ../../formats/moko.rst:2
-#, fuzzy
-#| msgid "Android String Resource"
 msgid "Mobile Kotlin resources"
-msgstr "ملف موارد أندرويد"
+msgstr "موارد Mobile Kotlin"
 
 #: ../../formats/moko.rst:9
 msgid ""
@@ -45187,7 +45166,7 @@ msgstr "ملف موارد أندرويد"
 
 #: ../../formats/odf.rst:4
 msgid "OpenDocument Format"
-msgstr ""
+msgstr "تنسيق المستند المفتوح"
 
 #: ../../formats/odf.rst:8
 msgid ""
@@ -45245,7 +45224,7 @@ msgstr ""
 
 #: ../../formats/qt.rst:4
 msgid "Qt Linguist .ts"
-msgstr ""
+msgstr "Qt Linguist .ts"
 
 #: ../../formats/qt.rst:10
 msgid "Translation format used in Qt based applications."
@@ -45287,10 +45266,8 @@ msgid "``i18n/app.en.ts``"
 msgstr "``i18n/app.en.ts``"
 
 #: ../../formats/resourcedict.rst:4
-#, fuzzy
-#| msgid "Repository failure"
 msgid "ResourceDictionary files"
-msgstr "خطأ فادح في المستودع"
+msgstr "ملفات قاموس الموارد"
 
 #: ../../formats/resourcedict.rst:12
 msgid ""
@@ -45320,10 +45297,8 @@ msgid "`ResourceDictionary file`"
 msgstr "خطأ فادح في المستودع"
 
 #: ../../formats/resx.rst:4
-#, fuzzy
-#| msgid ".NET resource file"
 msgid ".NET resource files (RESX, RESW)"
-msgstr "ملف موارد .Net"
+msgstr "ملفات موارد NET (RESX، RESW)."
 
 #: ../../formats/resx.rst:11
 msgid ""
@@ -45360,7 +45335,7 @@ msgstr "ملف موارد .Net"
 
 #: ../../formats/ruby.rst:4
 msgid "Ruby YAML files"
-msgstr ""
+msgstr "ملفات Ruby YAML"
 
 #: ../../formats/ruby.rst:9
 msgid "Ruby i18n YAML files with language as root node."
@@ -45387,10 +45362,8 @@ msgid "`Ruby YAML file`"
 msgstr ""
 
 #: ../../formats/stringsdict.rst:4
-#, fuzzy
-#| msgid "Strings with comments"
 msgid "Stringsdict format"
-msgstr "سلاسل تحتوي على تعليقات"
+msgstr "تنسيقStringsdict"
 
 #: ../../formats/stringsdict.rst:8
 msgid ""
@@ -45422,7 +45395,7 @@ msgstr "سلاسل تحتوي على تعليقات"
 
 #: ../../formats/subtitles.rst:4
 msgid "Subtitle files"
-msgstr ""
+msgstr "ملفات الترجمة"
 
 #: ../../formats/subtitles.rst:6
 #, fuzzy
@@ -45574,7 +45547,7 @@ msgstr "ملف JSON i18next"
 
 #: ../../formats/webextension.rst:4
 msgid "WebExtension JSON"
-msgstr ""
+msgstr "ملحق الويب JSON"
 
 #: ../../formats/webextension.rst:6
 msgid ""
@@ -45611,7 +45584,7 @@ msgstr ""
 
 #: ../../formats/winrc.rst:4
 msgid "Windows RC files"
-msgstr ""
+msgstr "ملفات ويندوز RC"
 
 #: ../../formats/winrc.rst:8
 msgid "Support for Windows RC files has been rewritten."
@@ -45859,7 +45832,7 @@ msgstr ""
 
 #: ../../formats/yaml.rst:4
 msgid "YAML files"
-msgstr ""
+msgstr "ملفات YAML"
 
 #: ../../formats/yaml.rst:9
 msgid ""
@@ -52042,6 +52015,9 @@ msgid ""
 "mail ``hosted@weblate.org``, and a name or profile description :guilabel:"
 "`Weblate push user`)."
 msgstr ""
+"بالنسبة لـ Weblate المستضاف، هناك مستخدم دفع مخصص مسجل على GitHub وBitbucket "
+"وCodeberg وGitLab (مع اسم المستخدم :guilabel:`weblate`، والبريد الإلكتروني "
+"``hosted@weblate.org``، واسم أو وصف ملف شخصي :guilabel:`مستخدم دفع Weblate`)."
 
 #: ../../vcs.rst:33
 msgid ""
