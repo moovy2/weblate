@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import jsonschema.exceptions
 import requests
+from django.template.loader import render_to_string
 from django.utils import timezone as dj_timezone
 from django.utils.translation import gettext_lazy
 from drf_spectacular.utils import OpenApiResponse, OpenApiWebhook, extend_schema
@@ -22,8 +23,10 @@ from weblate_schemas import load_schema, validate_schema
 from weblate.addons.base import ChangeBaseAddon
 from weblate.addons.forms import WebhooksAddonForm
 from weblate.trans.util import split_plural
+from weblate.utils.requests import request
 
 if TYPE_CHECKING:
+    from weblate.addons.models import AddonActivityLog
     from weblate.trans.models import Change
 
 
@@ -51,10 +54,11 @@ class WebhookAddon(ChangeBaseAddon):
     settings_form = WebhooksAddonForm
     icon = "webhook.svg"
 
-    def change_event(self, change: Change) -> None:
+    def change_event(self, change: Change) -> dict | None:
         """Deliver notification message."""
         config = self.instance.configuration
-        if change.action in config["events"]:
+        events = {int(event) for event in config["events"]}
+        if change.action in events:
             try:
                 payload = self.build_webhook_payload(change)
             except (
@@ -63,18 +67,29 @@ class WebhookAddon(ChangeBaseAddon):
             ) as error:
                 raise MessageNotDeliveredError from error
 
+            headers = self.build_headers(change, payload)
+
             try:
-                response = requests.post(
+                response = request(
+                    method="post",
                     url=config["webhook_url"],
                     json=payload,
                     headers=self.build_headers(change, payload),
                     timeout=15,
+                    raise_for_status=False,
                 )
             except requests.exceptions.ConnectionError as error:
                 raise MessageNotDeliveredError from error
 
-            if not 200 <= response.status_code <= 299:
-                raise MessageNotDeliveredError
+            return {
+                "request": {"headers": headers, "payload": payload},
+                "response": {
+                    "status_code": response.status_code,
+                    "content": response.text,
+                    "headers": dict(response.headers),
+                },
+            }
+        return None
 
     def build_webhook_payload(self, change: Change) -> dict[str, int | str | list[str]]:
         """Build a Schema-valid payload from change event."""
@@ -117,6 +132,12 @@ class WebhookAddon(ChangeBaseAddon):
             "webhook-id": webhook_id,
             "webhook-signature": wh.sign(webhook_id, attempt_time, json.dumps(payload)),
         }
+
+    def render_activity_log(self, activity: AddonActivityLog) -> str:
+        return render_to_string(
+            "addons/webhook_log.html",
+            {"activity": activity, "details": activity.details["result"]},
+        )
 
 
 class StandardWebhooksUtils:

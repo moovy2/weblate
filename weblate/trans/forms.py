@@ -27,7 +27,7 @@ from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 from django.utils.http import urlencode
 from django.utils.safestring import mark_safe
-from django.utils.text import slugify
+from django.utils.text import normalize_newlines, slugify
 from django.utils.translation import gettext, gettext_lazy
 from translation_finder import DiscoveryResult, discover
 
@@ -70,6 +70,7 @@ from weblate.utils.forms import (
     ColorWidget,
     ContextDiv,
     EmailField,
+    NormalizedNewlineCharField,
     QueryField,
     SearchField,
     SortedSelect,
@@ -89,11 +90,12 @@ from weblate.utils.state import (
     get_state_label,
 )
 from weblate.utils.validators import validate_file_extension
+from weblate.utils.views import get_sort_name
 from weblate.vcs.models import VCS_REGISTRY
 
 if TYPE_CHECKING:
     from weblate.accounts.models import Profile
-    from weblate.trans.mixins import URLMixin
+    from weblate.trans.mixins import BaseURLMixin, URLMixin
     from weblate.trans.models.translation import NewUnitParams
 
 BUTTON_TEMPLATE = """
@@ -401,7 +403,7 @@ class PluralTextarea(forms.Textarea):
             if fieldname not in data:
                 break
             ret.append(data.get(fieldname, ""))
-        return [r.replace("\r", "") for r in ret]
+        return [normalize_newlines(r) for r in ret]
 
 
 class PluralField(forms.CharField):
@@ -758,10 +760,21 @@ class SearchForm(forms.Form):
             return {"q": request.GET["q"]}
         return None
 
-    def __init__(self, user: User, language=None, show_builder=True, **kwargs) -> None:
+    def __init__(
+        self,
+        *,
+        request: AuthenticatedHttpRequest,
+        language: Language | None = None,
+        show_builder=True,
+        obj: type[Model | BaseURLMixin] | None = None,
+        **kwargs,
+    ) -> None:
         """Generate choices for other components in the same project."""
-        self.user = user
+        self.user = request.user
         self.language = language
+        sort_by = get_sort_name(request, obj)
+        self.sort_name = sort_by["name"]
+        self.sort_query = sort_by["query"]
         super().__init__(**kwargs)
 
         self.helper = FormHelper(self)
@@ -1097,7 +1110,7 @@ class CommentForm(forms.Form):
             ),
         ),
     )
-    comment = forms.CharField(
+    comment = NormalizedNewlineCharField(
         widget=MarkdownTextarea,
         label=gettext_lazy("New comment"),
         help_text=gettext_lazy("You can use Markdown and mention users by @username."),

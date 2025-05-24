@@ -270,7 +270,10 @@ def show_project_language(request: AuthenticatedHttpRequest, obj: ProjectLanguag
             ),
             "title": f"{project_object} - {language_object}",
             "search_form": SearchForm(
-                user, language=language_object, initial=SearchForm.get_initial(request)
+                request=request,
+                language=language_object,
+                initial=SearchForm.get_initial(request),
+                obj=obj,
             ),
             "announcement_form": optional_form(
                 AnnouncementForm, user, "project.edit", obj
@@ -321,7 +324,7 @@ def show_category_language(request: AuthenticatedHttpRequest, obj):
 
     return render(
         request,
-        "category-project.html",
+        "category-language.html",
         {
             "allow_index": True,
             "language": language_object,
@@ -337,7 +340,10 @@ def show_category_language(request: AuthenticatedHttpRequest, obj):
             ),
             "title": f"{category_object} - {language_object}",
             "search_form": SearchForm(
-                user, language=language_object, initial=SearchForm.get_initial(request)
+                request=request,
+                language=language_object,
+                initial=SearchForm.get_initial(request),
+                obj=obj,
             ),
             "language_stats": category_object.stats.get_single_language_stats(
                 language_object
@@ -408,7 +414,7 @@ def show_project(request: AuthenticatedHttpRequest, obj):
             "reports_form": ReportsForm({"project": obj}),
             "language_stats": [stat.obj or stat for stat in language_stats],
             "search_form": SearchForm(
-                request.user, initial=SearchForm.get_initial(request)
+                request=request, initial=SearchForm.get_initial(request), obj=obj
             ),
             "announcement_form": optional_form(
                 AnnouncementForm, user, "project.edit", obj
@@ -490,7 +496,9 @@ def show_category(request: AuthenticatedHttpRequest, obj):
             "last_announcements": last_announcements,
             "reports_form": ReportsForm({"category": obj}),
             "language_stats": [stat.obj or stat for stat in language_stats],
-            "search_form": SearchForm(user, initial=SearchForm.get_initial(request)),
+            "search_form": SearchForm(
+                request=request, initial=SearchForm.get_initial(request), obj=obj
+            ),
             "announcement_form": optional_form(
                 AnnouncementForm, user, "project.edit", obj
             ),
@@ -580,7 +588,7 @@ def show_component(request: AuthenticatedHttpRequest, obj: Component):
                 instance=obj,
             ),
             "search_form": SearchForm(
-                request.user, initial=SearchForm.get_initial(request)
+                request=request, initial=SearchForm.get_initial(request), obj=obj
             ),
             "alerts": obj.all_active_alerts
             if "alerts" not in request.GET
@@ -599,7 +607,10 @@ def show_translation(request: AuthenticatedHttpRequest, obj):
     form = get_upload_form(user, obj)
 
     search_form = SearchForm(
-        request.user, language=obj.language, initial=SearchForm.get_initial(request)
+        request=request,
+        language=obj.language,
+        initial=SearchForm.get_initial(request),
+        obj=obj,
     )
 
     # Translations to same language from other components in this project
@@ -749,8 +760,9 @@ def new_language(request: AuthenticatedHttpRequest, path):
                             ),
                         )
                 try:
+                    # force_scan needed, see add_new_language
                     if added and not obj.create_translations(
-                        request=request, run_async=True
+                        request=request, force_scan=True
                     ):
                         messages.success(
                             request,

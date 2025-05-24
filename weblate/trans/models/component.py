@@ -93,7 +93,7 @@ from weblate.utils.licenses import (
     get_license_url,
     is_libre,
 )
-from weblate.utils.lock import WeblateLock, WeblateLockTimeoutError
+from weblate.utils.lock import WeblateLock
 from weblate.utils.random import get_random_identifier
 from weblate.utils.render import (
     render_template,
@@ -780,6 +780,9 @@ class Component(
         verbose_name=gettext_lazy("Use as a glossary"),
         default=False,
         db_index=True,
+        help_text=gettext_lazy(
+            "Glossaries are different from regular translations but help keep track of and share consistent terminology."
+        ),
     )
     glossary_color = models.CharField(
         verbose_name=gettext_lazy("Glossary color"),
@@ -870,6 +873,7 @@ class Component(
         self._invalidate_scheduled = False
         self._alerts_scheduled = False
         self._template_check_done = False
+        self._glossary_sync_scheduled = False
         self.new_lang_error_message: str | None = None
 
     def save(self, *args, **kwargs) -> None:
@@ -1758,7 +1762,7 @@ class Component(
 
         if result:
             # create translation objects for all files
-            self.create_translations(request=request, run_async=True)
+            self.create_translations(request=request)
 
             # Push after possible merge
             self.push_if_needed(do_update=False)
@@ -1956,7 +1960,7 @@ class Component(
             self.trigger_post_update(previous_head, False)
 
             # create translation objects for all files
-            self.create_translations(request=request, force=True, run_async=True)
+            self.create_translations(request=request, force=True)
             return True
 
     @perform_on_link
@@ -1997,7 +2001,7 @@ class Component(
     @transaction.atomic
     def do_file_scan(self, request=None):
         self.commit_pending("file-scan", request.user if request else None)
-        self.create_translations(request=request, force=True, run_async=True)
+        self.create_translations(request=request, force=True)
         return True
 
     def get_repo_link_url(self):
@@ -2385,9 +2389,14 @@ class Component(
                 and self.auto_lock_error
                 and alert in LOCKING_ALERTS
                 and not self.alert_set.filter(name__in=LOCKING_ALERTS).exists()
-                and self.change_set.filter(action=ActionEvents.LOCK)
-                .order_by("-id")[0]
-                .auto_status
+                and getattr(
+                    # The object might not exist
+                    self.change_set.filter(action=ActionEvents.LOCK)
+                    .order_by("-id")
+                    .first(),
+                    "auto_status",
+                    None,
+                )
             ):
                 self.do_lock(user=None, lock=False, auto=True)
 
@@ -2429,28 +2438,29 @@ class Component(
 
     def create_translations(
         self,
+        *,
         force: bool = False,
+        force_scan: bool = False,
         langs: list[str] | None = None,
         request=None,
         changed_template: bool = False,
         from_link: bool = False,
         change: int | None = None,
-        run_async: bool = False,
     ) -> bool:
         """Load translations from VCS."""
-        if not run_async or settings.CELERY_TASK_ALWAYS_EAGER:
-            try:
-                # Asynchronous processing not requested or not available, run the update
-                # directly from the request processing.
-                # NOTE: In case the lock cannot be acquired, an error will be raised.
-                return self.create_translations_task(
-                    force, langs, request, changed_template, from_link, change
-                )
-            except WeblateLockTimeoutError:
-                if settings.CELERY_TASK_ALWAYS_EAGER:
-                    # Retry will not address anything
-                    raise
-                # Else, fall back to asynchronous process.
+        if settings.CELERY_TASK_ALWAYS_EAGER:
+            # Asynchronous processing not available, run the update
+            # directly from the request processing.
+            # NOTE: In case the lock cannot be acquired, an error will be raised.
+            return self.create_translations_immediate(
+                force=force,
+                force_scan=force_scan,
+                langs=langs,
+                request=request,
+                changed_template=changed_template,
+                from_link=from_link,
+                change=change,
+            )
 
         from weblate.trans.tasks import perform_load
 
@@ -2458,6 +2468,7 @@ class Component(
         perform_load.delay_on_commit(
             pk=self.pk,
             force=force,
+            force_scan=force_scan,
             langs=langs,
             changed_template=changed_template,
             from_link=from_link,
@@ -2465,9 +2476,11 @@ class Component(
         )
         return False
 
-    def create_translations_task(
+    def create_translations_immediate(
         self,
+        *,
         force: bool = False,
+        force_scan: bool = False,
         langs: list[str] | None = None,
         request=None,
         changed_template: bool = False,
@@ -2482,7 +2495,13 @@ class Component(
         # In case the lock cannot be acquired, an error will be raised.
         with self.lock, self.start_sentry_span("create_translations"):  # pylint: disable=not-context-manager
             return self._create_translations(
-                force, langs, request, changed_template, from_link, change
+                force=force,
+                force_scan=force_scan,
+                langs=langs,
+                request=request,
+                changed_template=changed_template,
+                from_link=from_link,
+                change=change,
             )
 
     def check_template_valid(self) -> None:
@@ -2498,7 +2517,9 @@ class Component(
 
     def _create_translations(  # noqa: C901,PLR0915
         self,
+        *,
         force: bool = False,
+        force_scan: bool = False,
         langs: list[str] | None = None,
         request=None,
         changed_template: bool = False,
@@ -2517,6 +2538,7 @@ class Component(
             self.processed_revision == current_revision
             and self.local_revision
             and not force
+            and not force_scan
         ):
             self.log_info("this revision has been already parsed, skipping update")
             self.progress_step(100)
@@ -2654,8 +2676,8 @@ class Component(
             component.translations_count = -1
             try:
                 # Do not run these linked repos update as other background tasks.
-                was_change |= component.create_translations_task(
-                    force, langs, request=request, from_link=True
+                was_change |= component.create_translations_immediate(
+                    force=force, langs=langs, request=request, from_link=True
                 )
             except FileParseError as error:
                 if not isinstance(error.__cause__, FileNotFoundError):
@@ -3257,10 +3279,10 @@ class Component(
         was_change = False
         if changed_setup:
             was_change = self.create_translations(
-                force=True, changed_template=changed_template, run_async=True
+                force=True, changed_template=changed_template
             )
         elif changed_git:
-            was_change = self.create_translations(run_async=True)
+            was_change = self.create_translations()
 
         # Update variants (create_translation does this on change)
         if changed_variant and not was_change:
@@ -3721,7 +3743,9 @@ class Component(
 
         # Trigger parsing of the newly added file
         if create_translations:
-            self.create_translations(request=request, run_async=True)
+            # Forced scanning is needed in case adding file does not trigger commit,
+            # for example when adding appstore metadata which only creates directory.
+            self.create_translations(request=request, force_scan=True)
             messages.info(
                 request,
                 gettext("The translation will be updated in the background."),
@@ -3820,7 +3844,8 @@ class Component(
             else:
                 for glossary in self.project.glossaries:
                     sync_glossary_languages(glossary.pk, component=glossary)
-        else:
+        elif not self._glossary_sync_scheduled:
+            self._glossary_sync_scheduled = True
             transaction.on_commit(self._schedule_sync_terminology)
 
     def _schedule_sync_terminology(self) -> None:
@@ -3831,6 +3856,7 @@ class Component(
         else:
             for glossary in self.project.glossaries:
                 sync_glossary_languages.delay_on_commit(glossary.pk)
+        self._glossary_sync_scheduled = False
 
     def get_unused_enforcements(self) -> Iterable[dict | BaseCheck]:
         from weblate.trans.models import Unit
