@@ -21,10 +21,12 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from standardwebhooks.webhooks import Webhook, WebhookVerificationError
 
 from weblate.lang.models import Language
 from weblate.trans.actions import ActionEvents
 from weblate.trans.models import (
+    Announcement,
     Comment,
     Component,
     Suggestion,
@@ -67,7 +69,7 @@ from .properties import PropertiesSortAddon
 from .removal import RemoveComments, RemoveSuggestions
 from .resx import ResxUpdateAddon
 from .tasks import cleanup_addon_activity_log, daily_addons
-from .webhooks import StandardWebhooksUtils, WebhookAddon, WebhookVerificationError
+from .webhooks import WebhookAddon
 from .xml import XMLCustomizeAddon
 from .yaml import YAMLCustomizeAddon
 
@@ -631,7 +633,7 @@ class JsonAddonTest(ViewTestCase):
         SameEditAddon.create(component=self.component)
 
         Unit.objects.filter(translation__language__code="cs").delete()
-        self.component.create_translations(force=True)
+        self.component.create_translations_immediate(force=True)
         self.assertFalse(
             Unit.objects.filter(translation__language__code="cs")
             .exclude(state__in=(STATE_FUZZY, STATE_EMPTY))
@@ -639,31 +641,56 @@ class JsonAddonTest(ViewTestCase):
         )
 
         Unit.objects.all().delete()
-        self.component.create_translations(force=True)
+        self.component.create_translations_immediate(force=True)
         self.assertFalse(
             Unit.objects.exclude(
                 state__in=(STATE_FUZZY, STATE_EMPTY, STATE_READONLY)
             ).exists()
         )
 
-    def asset_customize(self, expected: str) -> None:
+    def asset_customize(self, expected: str, *, is_compact: bool = False) -> str:
         rev = self.component.repository.last_revision
         self.edit_unit("Hello, world!\n", "Nazdar svete!\n")
         self.get_translation().commit_pending("test", None)
         self.assertNotEqual(rev, self.component.repository.last_revision)
         commit = self.component.repository.show(self.component.repository.last_revision)
         self.assertIn(f'{expected}"try"', commit)
+        if is_compact:
+            self.assertIn('":"', commit)
+        else:
+            self.assertIn(': "', commit)
+        return commit
 
     def test_customize(self) -> None:
         JSONCustomizeAddon.create(
             component=self.component,
-            configuration={"indent": 8, "sort": 1, "style": "spaces"},
+            configuration={"indent": 8, "sort_keys": 1, "style": "spaces"},
         )
-        self.asset_customize("        ")
+        commit = self.asset_customize("        ")
+        self.assertIn(
+            '''"orangutan": "",
++        "thanks": "",
++        "try": ""''',
+            commit,
+        )
+
+    def test_customize_no_sort(self) -> None:
+        self.edit_unit("Hello, world!\n", "Nazdar svete!\n")
+        JSONCustomizeAddon.create(
+            component=self.component,
+            configuration={"indent": 8, "sort_keys": 0, "style": "spaces"},
+        )
+        commit = self.asset_customize("        ")
+        self.assertIn(
+            '''"orangutan": "",
++        "try": "",
++        "thanks": ""''',
+            commit,
+        )
 
     def test_customize_sitewide(self) -> None:
         JSONCustomizeAddon.create(
-            configuration={"indent": 8, "sort": 1, "style": "spaces"},
+            configuration={"indent": 8, "sort_keys": 1, "style": "spaces"},
         )
         # This is not needed in real life as installation will happen
         # in a different request so local caching does not apply
@@ -674,9 +701,33 @@ class JsonAddonTest(ViewTestCase):
     def test_customize_tabs(self) -> None:
         JSONCustomizeAddon.create(
             component=self.component,
-            configuration={"indent": 8, "sort": 1, "style": "tabs"},
+            configuration={"indent": 8, "sort_keys": 1, "style": "tabs"},
         )
         self.asset_customize("\t\t\t\t\t\t\t\t")
+
+    def test_customize_compact_mode_on(self) -> None:
+        JSONCustomizeAddon.create(
+            component=self.component,
+            configuration={
+                "indent": 4,
+                "sort_keys": 1,
+                "style": "spaces",
+                "use_compact_separators": 1,
+            },
+        )
+        self.asset_customize("    ", is_compact=True)
+
+    def test_customize_compact_mode_off(self) -> None:
+        JSONCustomizeAddon.create(
+            component=self.component,
+            configuration={
+                "indent": 4,
+                "sort_keys": 1,
+                "style": "spaces",
+                "use_compact_separators": 0,
+            },
+        )
+        self.asset_customize("    ", is_compact=False)
 
 
 class XMLAddonTest(ViewTestCase):
@@ -1575,7 +1626,7 @@ class SiteWideAddonsTest(ViewTestCase):
 
     def test_json(self) -> None:
         JSONCustomizeAddon.create(
-            configuration={"indent": 8, "sort": 1, "style": "spaces"},
+            configuration={"indent": 8, "sort_keys": 1, "style": "spaces"},
         )
         # This is not needed in real life as installation will happen
         # in a different request so local caching does not apply
@@ -1606,7 +1657,7 @@ class WebhookAddonsTest(ViewTestCase):
         self.reset_addon_configuration()
 
     def reset_addon_configuration(self):
-        self.addon_configuration["events"] = [ActionEvents.NEW]
+        self.addon_configuration["events"] = [str(ActionEvents.NEW)]
 
     def do_translation_added_test(
         self, response_code=None, expected_calls: int = 1, **responses_kwargs
@@ -1656,6 +1707,27 @@ class WebhookAddonsTest(ViewTestCase):
         responses.calls.reset()
         self.edit_unit("Hello, world!\n", "Nazdar svete edit!\n")
         self.assertEqual(len(responses.calls), 1)
+
+    @responses.activate
+    def test_announcement(self) -> None:
+        """Test project and site wide events."""
+        self.addon_configuration["events"].append(ActionEvents.ANNOUNCEMENT)
+        WebhookAddon.create(configuration=self.addon_configuration)
+        WebhookAddon.create(
+            configuration=self.addon_configuration, project=self.project
+        )
+
+        responses.calls.reset()
+        Announcement.objects.create(user=self.user, message="Site-wide")
+        # Only site-wide add-on should receive this
+        self.assertEqual(len(responses.calls), 1)
+
+        responses.calls.reset()
+        Announcement.objects.create(
+            user=self.user, message="Project-wide", project=self.project
+        )
+        # Both site-wide and project-wide add-ons should receive this
+        self.assertEqual(len(responses.calls), 2)
 
     @responses.activate
     def test_component_scopes(self) -> None:
@@ -1779,13 +1851,13 @@ class WebhookAddonsTest(ViewTestCase):
         self.do_translation_added_test(response_code=200)
 
         wh_request = responses.calls[0].request
-        wh_utils = StandardWebhooksUtils("secret-string")
+        wh_utils = Webhook("secret-string")
 
         # valid request
         wh_utils.verify(wh_request.body, wh_request.headers)
 
         # valid request with bytes
-        StandardWebhooksUtils(base64.b64decode("secret-string")).verify(
+        Webhook(base64.b64decode("secret-string")).verify(
             wh_request.body, wh_request.headers
         )
 
@@ -1816,7 +1888,7 @@ class WebhookAddonsTest(ViewTestCase):
 
         #  "Invalid secret"
         with self.assertRaises(WebhookVerificationError):
-            StandardWebhooksUtils("xxxx-xxxx-xxxx").verify(wh_request.body, wh_headers)
+            Webhook("xxxx-xxxx-xxxx").verify(wh_request.body, wh_headers)
 
         #  "Invalid format of timestamp"
         with self.assertRaises(WebhookVerificationError):
@@ -1844,7 +1916,7 @@ class WebhookAddonsTest(ViewTestCase):
         """Test WebhooksAddonForm."""
         self.user.is_superuser = True
         self.user.save()
-        # Missing params
+        # Missing url param
         response = self.client.post(
             reverse("addons", kwargs=self.kw_component),
             {
@@ -1862,6 +1934,7 @@ class WebhookAddonsTest(ViewTestCase):
                 "name": "weblate.webhook.webhook",
                 "form": "1",
                 "webhook_url": "https://example.com/webhooks",
+                "secret": "",
             },
             follow=True,
         )

@@ -29,8 +29,10 @@ from weblate.memory.utils import is_valid_memory_entry
 from weblate.trans.actions import ActionEvents
 from weblate.trans.autofixes import fix_target
 from weblate.trans.mixins import LoggerMixin
+from weblate.trans.models.category import Category
 from weblate.trans.models.change import Change
 from weblate.trans.models.comment import Comment
+from weblate.trans.models.project import Project
 from weblate.trans.models.suggestion import Suggestion
 from weblate.trans.models.variant import Variant
 from weblate.trans.signals import unit_pre_create
@@ -254,6 +256,7 @@ class UnitQuerySet(models.QuerySet):
             "source",
             "target",
             "location",
+            "component",
         ]
         countable_sort_choices: dict[str, dict[str, Any]] = {
             "num_comments": {"order_by": "comment__count", "filter": None},
@@ -274,12 +277,30 @@ class UnitQuerySet(models.QuerySet):
                     countable_sort_choices[unsigned_choice]["filter"],
                 )
             if unsigned_choice in available_sort_choices:
+                if unsigned_choice == "component":
+                    sign = "-" if choice[0] == "-" else ""
+                    sort_list.extend(
+                        [
+                            sign + "translation__component__priority",
+                            sign + "translation__component__is_glossary",
+                            sign + "translation__component__name",
+                        ]
+                    )
+                    continue
+
                 if unsigned_choice == "labels":
                     choice = choice.replace("labels", "max_labels_name")
                 sort_list.append(choice)
         if not sort_list:
             if hasattr(obj, "component") and obj.component.is_glossary:
                 sort_list = ["source"]
+            elif isinstance(obj, Project | Category):
+                sort_list = [
+                    "translation__component__priority",
+                    "translation__component__is_glossary",
+                    "translation__component__name",
+                    "-priority",
+                ]
             else:
                 sort_list = ["-priority", "position"]
         if "max_labels_name" in sort_list or "-max_labels_name" in sort_list:
@@ -289,7 +310,7 @@ class UnitQuerySet(models.QuerySet):
         return self.order_by(*sort_list)
 
     def order_by_count(self, choice: str, count_filter) -> UnitQuerySet:
-        model = choice.split("__")[0].replace("-", "")
+        model = choice.split("__", 1)[0].replace("-", "")
         annotation_name = choice.replace("-", "")
         return self.annotate(
             **{annotation_name: Count(model, filter=count_filter)}
@@ -874,6 +895,10 @@ class Unit(models.Model, LoggerMixin):
                     # Store previous source and fuzzy flag for monolingual
                     if not previous_source:
                         source_change = previous_source = self.source
+                        # Keep prevoious source if already set in case source
+                        # changes multiple times
+                        if self.previous_source:
+                            previous_source = self.previous_source
                     state = STATE_FUZZY
                 pending = True
             elif (
@@ -1980,16 +2005,19 @@ class Unit(models.Model, LoggerMixin):
             self.translation.component.file_format_cls.supports_explanation
         )
         units: Iterable[Unit] = []
+        if self.is_source:
+            units = self.unit_set.exclude(id=self.id).select_for_update()
+        # Mark change as pending if file format supports this
         if file_format_support:
             if self.is_source:
-                units = self.unit_set.exclude(id=self.id).select_for_update()
                 units.update(pending=True)
             else:
                 self.pending = True
-            # Always generate change for self
-            units = [*units, self]
         if save:
             self.save(update_fields=["explanation", "pending"], only_save=True)
+
+        # Always generate change for self
+        units = [*units, self]
 
         for unit in units:
             unit.generate_change(
@@ -2007,7 +2035,10 @@ class Unit(models.Model, LoggerMixin):
         self, extra_flags: str, user: User, save: bool = True
     ) -> None:
         """Update unit extra flags."""
+        verify_in_transaction()
         old = self.old_unit["extra_flags"]
+        if old == extra_flags:
+            return
         self.extra_flags = extra_flags
         units: Iterable[Unit] = []
         if self.is_source:

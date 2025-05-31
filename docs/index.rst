@@ -76,6 +76,7 @@ Learn more about :ref:`contributing`.
     devel/starting
     devel/integration
     devel/gettext
+    devel/mobile
     devel/sphinx
     devel/html
     devel/third-party
@@ -136,11 +137,24 @@ Learn more about :ref:`contributing`.
     contributing/tests
     contributing/schemas
     contributing/release
-    contributing/security
     contributing/modules
     contributing/about
     contributing/license
     contributing/trademark
+
+.. toctree::
+   :caption: Secure Weblate
+   :maxdepth: 1
+   :hidden:
+
+   security/index
+   security/dependencies
+   security/issues
+   security/incident-response-plan
+   security/passwords
+   security/disaster-recovery-plan
+   security/threat-model
+   security/privacy-compliance
 
 .. toctree::
    :caption: File formats
