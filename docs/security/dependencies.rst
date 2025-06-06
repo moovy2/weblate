@@ -1,20 +1,14 @@
-Security and privacy
-====================
+Dependencies
+============
 
-.. tip::
+.. _sbom:
 
-   At Weblate, security maintains an environment that values the privacy of our users.
+Software Bill of Material
+-------------------------
 
-Development of Weblate adheres to the `Best Practices of the Linux Foundation's Core Infrastructure Initiative <https://www.bestpractices.dev/en/projects/552>`_.
-
-.. seealso::
-
-   Discovered a security issue in Weblate? Please read :ref:`security`.
-
-Security updates
-----------------
-
-Only the latest release is guaranteed to receive security updates.
+Weblate comes with a Software Bill of Material (SBOM) in the source core as
+:file:`docs/specs/sbom/sbom.json` using the CycloneDX format. This can be used to review
+the dependencies for security issues or license compliance.
 
 Tracking dependencies for vulnerabilities
 -----------------------------------------

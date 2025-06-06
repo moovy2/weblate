@@ -4,13 +4,13 @@
 
 services:
   database:
-    image: mysql:9.3.0@sha256:7839322bd6c3174a699586c3ea36314c59b61b4ce01b4146951818b94aef5fd7
+    image: mysql:9.3.0@sha256:04768cb63395f56140b4e92cad7c8d9f48dfa181075316e955da75aadca8a7cd
     ports:
     - 60000:3306
     environment:
       MYSQL_ROOT_PASSWORD: weblate
   cache:
-    image: redis:7.4.3-alpine@sha256:f773b35a95e170d92dd4214a3ec4859b1b7960bf56896ae687646d695f311187
+    image: redis:8.0.2-alpine@sha256:48501c5ad00d5563bc30c075c7bcef41d7d98de3e9a1e6c752068c66f0a8463b
     restart: always
     ports:
     - 60001:6379

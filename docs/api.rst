@@ -324,6 +324,7 @@ Users
     :>json string date_joined: date the user is created
     :>json string last_login: date the user last signed in
     :>json array groups: link to associated groups; see :http:get:`/api/groups/(int:id)/`
+    :>json array languages: link to translated languages; see :http:get:`/api/languages/(string:language)/`
 
     **Example JSON data:**
 
@@ -336,6 +337,9 @@ Users
             "groups": [
                 "http://example.com/api/groups/2/",
                 "http://example.com/api/groups/3/"
+            ],
+            "languages": [
+                "http://example.com/api/languages/cs/",
             ],
             "is_superuser": true,
             "is_active": true,
@@ -2285,6 +2289,24 @@ and XLIFF.
    .. versionadded:: 5.11
 
    Returns a list of all target translation units for the given source translation unit.
+
+.. http:post:: /api/units/(int:id)/comments/
+
+    .. versionadded:: 5.12
+
+    Create a new comment on the given translation unit.
+
+    :param id: Unit ID
+    :type id: int
+    :<json string scope: comment scope - global, translation (available on all non-source units), report (need review workflow enabled, see :ref:`reviews`)
+    :<json string comment: content of the new comment, you can use Markdown and mention users by @username.
+    :<json string user_email: commenter's email, can be set only by project admins and defaults to the authenticated user.
+    :<json string timestamp: creation timestamp of the comment, can be set only by project admins and defaults to now.
+    :>json int id: comment identifier
+    :>json string comment: content of the new comment
+    :>json string user: URL of the commenter's object
+    :>json string timestamp: creation timestamp of the comment
+
 
 Changes
 +++++++
