@@ -113,7 +113,7 @@ def notify_changes(change_ids: list[int]) -> None:
     changes = Change.objects.prefetch_for_render().filter(pk__in=change_ids)
     factory = NotificationFactory()
 
-    for change in changes:
+    for change in changes.iterator(chunk_size=200):
         for notification in factory.for_action(change.action):
             notification.notify_immediate(change)
         factory.send_queued()
@@ -147,7 +147,7 @@ def notify_monthly() -> None:
 
 
 @app.task(trail=False)
-def notify_auditlog(log_id, email) -> None:
+def notify_auditlog(log_id: int, email: str) -> None:
     from weblate.accounts.models import AuditLog
     from weblate.accounts.notifications import send_notification_email
 
@@ -159,7 +159,7 @@ def notify_auditlog(log_id, email) -> None:
         context={
             "message": audit.get_message,
             "extra_message": audit.get_extra_message,
-            "address": audit.address,
+            "address": audit.shortened_address,
             "user_agent": audit.user_agent,
         },
         info=f"{audit.activity} from {audit.address}",

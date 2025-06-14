@@ -432,20 +432,16 @@ class SeleniumTests(
         )
         return project
 
-    def create_glossary(self, project, language) -> Translation:
-        glossary = project.glossaries[0].translation_set.get(language=language)
-        glossary.add_unit(
-            None,
-            "",
-            "machine translation",
-            "strojový překlad",
+    def create_glossary(
+        self, user: User, project: Project, language: Language
+    ) -> Translation:
+        glossary: Translation = project.glossaries[0].translation_set.get(
+            language=language
         )
         glossary.add_unit(
-            None,
-            "",
-            "project",
-            "projekt",
+            None, "", "machine translation", "strojový překlad", author=user
         )
+        glossary.add_unit(None, "", "project", "projekt", author=user)
         return glossary
 
     def view_site(self) -> None:
@@ -492,6 +488,7 @@ class SeleniumTests(
             self.click("Browse all projects")
         with self.wait_for_page_load():
             self.click("WeblateOrg")
+        self.click("Components")
         with self.wait_for_page_load():
             self.click("Django")
         self.click("Manage")
@@ -504,6 +501,8 @@ class SeleniumTests(
         # Make sure tesseract data is present and not downloaded at request time
         # what will cause test timeout.
         ensure_tesseract_language("eng")
+
+        user = self.do_login(superuser=True)
 
         text = (
             "Automatic translation via machine translation uses active "
@@ -519,7 +518,7 @@ class SeleniumTests(
         )
         source.explanation = "Help text for automatic translation tool"
         source.save()
-        self.create_glossary(project, language)
+        self.create_glossary(user, project, language)
         source.translation.component.alert_set.all().delete()
 
         def capture_unit(name, tab) -> None:
@@ -545,13 +544,13 @@ class SeleniumTests(
                 )
             )
 
-        self.do_login(superuser=True)
         capture_unit("source-information.png", "toggle-nearby")
         self.click(htmlid="projects-menu")
         with self.wait_for_page_load():
             self.click("Browse all projects")
         with self.wait_for_page_load():
             self.click("WeblateOrg")
+        self.click("Components")
         with self.wait_for_page_load():
             self.click("Django")
         self.click("Manage")
@@ -1054,6 +1053,7 @@ class SeleniumTests(
             self.click("Browse all projects")
         with self.wait_for_page_load():
             self.click("WeblateOrg")
+        self.click("Components")
         with self.wait_for_page_load():
             self.click("Duplicates")
         self.click("Alerts")
@@ -1197,6 +1197,7 @@ class SeleniumTests(
         # Navigate to component
         with self.wait_for_page_load():
             self.click("WeblateOrg")
+        self.click("Components")
         with self.wait_for_page_load():
             self.click("Android")
 
@@ -1240,10 +1241,10 @@ class SeleniumTests(
         time.sleep(0.2)
 
     def test_glossary(self) -> None:
-        self.do_login()
+        user = self.do_login()
         project = self.create_component()
         language = Language.objects.get(code="cs")
-        glossary = self.create_glossary(project, language)
+        glossary = self.create_glossary(user, project, language)
 
         self.driver.get(f"{self.live_server_url}{glossary.get_absolute_url()}")
         self.screenshot("glossary-component.png")
