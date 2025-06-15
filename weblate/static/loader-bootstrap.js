@@ -687,12 +687,6 @@ $(function () {
     }
   });
 
-  /* Widgets selector */
-  $(".select-tab").on("change", function (_e) {
-    $(this).parent().find(".tab-pane").removeClass("active");
-    $(`#${$(this).val()}`).addClass("active");
-  });
-
   /* Code samples (on widgets page) */
   $(".code-example").focus(function () {
     $(this).select();
@@ -1614,6 +1608,11 @@ $(function () {
     form.appendChild(elm);
     form.submit();
   });
+
+  // Register service worker of the PWA
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/service-worker.js");
+  }
 
   /* Warn users that they do not want to use developer console in most cases */
   // biome-ignore lint/suspicious: It is intentional to log a warning

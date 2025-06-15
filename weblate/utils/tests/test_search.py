@@ -351,6 +351,7 @@ class UnitQueryParserTest(SearchTestCase):
         self.assert_query("has:check", Q(check__dismissed=False))
         self.assert_query("has:comment", Q(comment__resolved=False))
         self.assert_query("has:note", ~Q(note=""))
+        self.assert_query("has:location", ~Q(location=""))
         self.assert_query("has:resolved-comment", Q(comment__resolved=True))
         self.assert_query("has:dismissed-check", Q(check__dismissed=True))
         self.assert_query("has:translation", Q(state__gte=STATE_TRANSLATED))
@@ -632,7 +633,7 @@ class SearchTest(ViewTestCase, SearchTestCase):
 
     def test_glossary_match(self) -> None:
         glossary = self.project.glossaries[0].translation_set.get(language_code="cs")
-        glossary.add_unit(None, "", "hello", "ahoj")
+        glossary.add_unit(None, "", "hello", "ahoj", author=self.user)
 
         if using_postgresql():
             expected = "[[:<:]](hello)[[:>:]]"
