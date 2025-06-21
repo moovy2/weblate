@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// biome-ignore lint/style/noVar: TODO: doesn't work without that
 // biome-ignore lint/correctness/noInvalidUseBeforeDeclaration: TODO: doesn't work without that
 var WLT = WLT || {};
 
 WLT.Config = (() => ({
-  // biome-ignore lint/performance/useTopLevelRegex: TODO: factor out
-  // biome-ignore lint/style/useNamingConvention: TODO: fix naming
   IS_MAC: /Mac|iPod|iPhone|iPad/.test(navigator.platform),
 }))();
 
@@ -32,22 +29,35 @@ WLT.Utils = (() => ({
   /**
    * Indicate that the translation has changed
    * by appending a warning before the editor.
+   * @param {Event} [e] - The event object (optional)
    * @returns {void}
    */
-  indicateChanges: () => {
-    const $warning = $("<span class='text-warning'/>");
-    const $editorArea = $(".translator .translation-editor");
+  indicateChanges: (e) => {
+    const $warning = $("<span id='unsaved-label' class='text-warning'/>");
+    const $editorArea = e
+      ? $(e.target).closest(".translation-editor")
+      : $(".translator .translation-editor");
     $warning.text(gettext("Unsaved changes!"));
     if ($editorArea.next(".text-warning").length === 0) {
       $warning.insertAfter($editorArea);
       $editorArea.addClass("has-changes");
     }
   },
+  /**
+   * Check if the translation has any changes
+   * @param {Event} [e] - The event object (optional)
+   * @returns {boolean}
+   */
+  editorHasChanges: (e) => {
+    const $editorArea = e
+      ? $(e.target).closest(".translation-editor")
+      : $(".translator .translation-editor");
+    return $editorArea.hasClass("has-changes");
+  },
 }))();
 
 WLT.Editor = (() => {
   let lastEditor = null;
-  let hasChanges = false;
 
   function EditorBase() {
     const translationAreaSelector = ".translation-editor";
@@ -58,8 +68,7 @@ WLT.Editor = (() => {
 
     this.$editor.on("input", translationAreaSelector, (e) => {
       WLT.Utils.markTranslated($(e.target).closest("form"));
-      WLT.Utils.indicateChanges();
-      hasChanges = true;
+      WLT.Utils.indicateChanges(e);
     });
 
     this.$editor.on("focusin", translationAreaSelector, function () {
@@ -90,7 +99,7 @@ WLT.Editor = (() => {
     });
 
     /* Copy source text */
-    this.$editor.on("click", "[data-clone-value]", function (_e) {
+    this.$editor.on("click", "[data-clone-value]", function (e) {
       const $this = $(this);
       const $document = $(document);
       const cloneText = this.getAttribute("data-clone-value");
@@ -123,21 +132,19 @@ WLT.Editor = (() => {
         });
       }
       WLT.Utils.markFuzzy($this.closest("form"));
-      WLT.Utils.indicateChanges();
-      hasChanges = true;
+      WLT.Utils.indicateChanges(e);
       return false;
     });
 
     /* Direction toggling */
-    this.$editor.on("change", ".direction-toggle", function () {
+    this.$editor.on("change", ".direction-toggle", function (e) {
       const $this = $(this);
       const direction = $this.find("input").val();
       const container = $this.closest(".translation-item");
 
       container.find(".translation-editor").attr("dir", direction);
       container.find(".highlighted-output").attr("dir", direction);
-      WLT.Utils.indicateChanges();
-      hasChanges = true;
+      WLT.Utils.indicateChanges(e);
     });
 
     /* Special characters */
@@ -150,8 +157,25 @@ WLT.Editor = (() => {
         .find(".translation-editor")
         .insertAtCaret(text);
       e.preventDefault();
-      WLT.Utils.indicateChanges();
-      hasChanges = true;
+      WLT.Utils.indicateChanges(e);
+    });
+
+    // Disable insertion and copy buttons for read only strings
+    $(".translator").each(function () {
+      const $this = $(this);
+
+      if ($this.find(".translation-editor").first().attr("readonly")) {
+        // Apply to zen unit or the entire document
+        // the latter also disables insertion from related strings
+        let root = $this.closest(".zen-unit");
+        if (root.length === 0) {
+          root = $(document);
+        }
+
+        root.find(".specialchar").attr("disabled", "");
+        root.find("[data-clone-value]").attr("disabled", "");
+        root.find(".hlcheck").addClass("disabled");
+      }
     });
 
     this.initHighlight();
@@ -162,27 +186,27 @@ WLT.Editor = (() => {
     // Show confirmation dialog if changes have been made
     // when leaving the page
     addEventListener("beforeunload", (e) => {
-      if (hasChanges) {
+      if (WLT.Utils.editorHasChanges()) {
         e.preventDefault();
         return true; // Backwards compatibility
       }
     });
 
     // Skip confirmation
-    this.$editor.on("click", ".skip", (_e) => {
-      if (hasChanges) {
+    this.$editor.on("click", ".skip", (e) => {
+      if (WLT.Utils.editorHasChanges(e)) {
         return confirm(
           gettext("You have unsaved changes. Are you sure you want to skip?"),
         );
       }
     });
 
+    // Remove unsaved changes warning when submitting
     this.$editor.on("submit", () => {
-      hasChanges = false;
+      $(".translator .translation-editor").removeClass("has-changes");
     });
   }
 
-  // biome-ignore lint/suspicious/noEmptyBlockStatements: TODO
   EditorBase.prototype.init = () => {};
 
   EditorBase.prototype.initHighlight = function () {
@@ -192,10 +216,12 @@ WLT.Editor = (() => {
     /* Copy from source text highlight check */
     this.$editor.on("click", hlSelector, function (e) {
       const $this = $(this);
-      insertEditor(this.getAttribute("data-value"), $this);
+      // Do not insert if highlighted element is disabled
+      if (!$this.hasClass("disabled")) {
+        insertEditor(this.getAttribute("data-value"), $this);
+      }
       e.preventDefault();
-      WLT.Utils.indicateChanges();
-      hasChanges = true;
+      WLT.Utils.indicateChanges(e);
     });
 
     /* and shortcuts */
@@ -275,7 +301,6 @@ WLT.Editor = (() => {
   }
 
   return {
-    // biome-ignore lint/style/useNamingConvention: TODO
     Base: EditorBase,
   };
 })();

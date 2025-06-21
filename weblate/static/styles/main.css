@@ -286,6 +286,10 @@ textarea#id_check_flags {
   white-space: pre-wrap;
 }
 
+.hlcheck.disabled {
+  cursor: not-allowed;
+}
+
 .hlmatch {
   background-color: #eb3;
 }
@@ -293,13 +297,19 @@ textarea#id_check_flags {
 .hlspace,
 .nbsp,
 .token.newline {
-  outline: 1px dotted red;
   color: #bfc3c7;
   white-space: pre-wrap;
 }
+
+.hlspace,
+.nbsp {
+  outline: 1px dotted red;
+}
+
 .nbsp {
   white-space: nowrap !important;
 }
+
 .space-tab,
 .space-nl,
 .space-space,
@@ -308,6 +318,7 @@ textarea#id_check_flags {
   /* inline-block needed for proper ::before placement in Chrome */
   display: inline-block;
 }
+
 .space-tab::before {
   content: "→";
   position: relative;
@@ -316,7 +327,8 @@ textarea#id_check_flags {
 .space-nl::before,
 .token.newline::before {
   content: "↵";
-  position: relative;
+  position: absolute;
+  outline: 1px dotted red;
 }
 
 .space-space::before {
@@ -612,7 +624,7 @@ form + .login-label {
   border-radius: 0 5px 5px 5px;
   background-color: #e5f0f2;
   padding: 8px 10px;
-  word-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 .comment-content blockquote {
   border-left: 5px solid #ddd;
@@ -1583,6 +1595,16 @@ a.format-item:hover {
   }
 }
 
+.label {
+  padding: 0.2em 0.6em;
+}
+
+h2 .label {
+  font-size: 12px;
+  vertical-align: middle;
+  text-transform: uppercase;
+}
+
 .label-box:empty {
   width: 1.2em;
   height: 1.2em;
@@ -2367,5 +2389,36 @@ table.table-simple tbody#glossary-terms td {
 
 /* Editor styles when it has changes */
 .has-changes {
-  border: 2px solid #8a6d3b !important;
+  border: 1px solid #8a6d3b !important;
+}
+
+.widget-card {
+  border: var(--border);
+  border-radius: var(--border-radius-sm);
+  box-shadow: 0 2px 4px var(--widget-card-box-shadow-color);
+  margin-bottom: 20px;
+  padding: 15px;
+  background-color: var(--background-color);
+}
+
+.widget-card h4 {
+  margin-bottom: 15px;
+  font-weight: bold;
+}
+
+.widget-card .form-label {
+  font-weight: normal;
+}
+
+.widget-card .form-control {
+  margin-bottom: 10px;
+}
+
+.widget-card {
+  margin-top: 10px;
+}
+
+#embed-code-label {
+  font-size: 1.25em;
+  font-weight: bold;
 }
