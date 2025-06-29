@@ -24,13 +24,13 @@ from django.http import (
 )
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.utils.translation import gettext, gettext_noop
+from django.utils.translation import gettext
 from django.views.decorators.http import require_POST
 
 from weblate.auth.models import AuthenticatedHttpRequest
 from weblate.checks.models import CHECKS, get_display_checks
 from weblate.glossary.forms import TermForm
-from weblate.glossary.models import get_glossary_terms
+from weblate.glossary.models import fetch_glossary_terms, get_glossary_terms
 from weblate.screenshots.forms import ScreenshotForm
 from weblate.trans.actions import ActionEvents
 from weblate.trans.autotranslate import AutoTranslate
@@ -48,6 +48,7 @@ from weblate.trans.forms import (
     get_new_unit_form,
 )
 from weblate.trans.models import Comment, Suggestion, Translation, Unit, Vote
+from weblate.trans.models.unit import fill_in_source_translation
 from weblate.trans.tasks import auto_translate
 from weblate.trans.templatetags.translations import (
     try_linkify_filename,
@@ -64,7 +65,6 @@ from weblate.utils.ratelimit import revert_rate_limit, session_ratelimit_post
 from weblate.utils.state import STATE_APPROVED, STATE_FUZZY, STATE_TRANSLATED
 from weblate.utils.stats import CategoryLanguage, ProjectLanguage
 from weblate.utils.views import (
-    get_sort_name,
     parse_path,
     parse_path_units,
     show_form_errors,
@@ -222,7 +222,9 @@ def search(
     """Perform search or returns cached search results."""
     now = int(time.time())
     # Possible new search
-    form = PositionSearchForm(user=request.user, data=request.GET, show_builder=False)
+    form = PositionSearchForm(
+        request=request, data=request.GET, show_builder=False, obj=base
+    )
 
     # Process form
     form_valid = form.is_valid()
@@ -277,6 +279,7 @@ def search(
             "name": str(name),
             "ids": unit_ids,
             "ttl": now + SESSION_SEARCH_CACHE_TTL,
+            "last_viewed_unit_id": None,
         }
         if use_cache:
             request.session[session_key] = store_result
@@ -637,6 +640,20 @@ def translate(request: AuthenticatedHttpRequest, path):
             messages.error(request, gettext("Invalid search string!"))
             return redirect(obj)
 
+    last_viewed_unit_id = search_result.get("last_viewed_unit_id")
+    if last_viewed_unit_id:
+        previous_unit = unit_set.get(pk=last_viewed_unit_id)
+        if unit.translation.component != previous_unit.translation.component:
+            messages.warning(
+                request,
+                gettext("You have shifted from %(previous)s to %(current)s.")
+                % {
+                    "previous": previous_unit.translation.full_slug,
+                    "current": unit.translation.full_slug,
+                },
+            )
+    search_result["last_viewed_unit_id"] = unit.id
+
     # Some URLs we will most likely use
     base_unit_url = "{}?{}&offset=".format(
         obj.get_translate_url(), search_result["url"]
@@ -679,7 +696,6 @@ def translate(request: AuthenticatedHttpRequest, path):
 
     # Prepare form
     form = TranslationForm(user, unit)
-    sort = get_sort_name(request, obj)
 
     screenshot_form = None
     if user.has_perm("screenshot.add", unit.translation):
@@ -713,8 +729,6 @@ def translate(request: AuthenticatedHttpRequest, path):
             "search_items": search_result["items"],
             "search_query": search_result["query"],
             "offset": offset,
-            "sort_name": sort["name"],
-            "sort_query": sort["query"],
             "filter_count": num_results,
             "filter_pos": offset,
             "form": form,
@@ -807,8 +821,7 @@ def auto_translation(request: AuthenticatedHttpRequest, path):
 @transaction.atomic
 def comment(request: AuthenticatedHttpRequest, pk):
     """Add new comment."""
-    scope = unit = get_object_or_404(Unit, pk=pk)
-    component = unit.translation.component
+    unit = get_object_or_404(Unit, pk=pk)
 
     if not request.user.has_perm("comment.add", unit.translation):
         raise PermissionDenied
@@ -816,28 +829,12 @@ def comment(request: AuthenticatedHttpRequest, pk):
     form = CommentForm(unit.translation, request.POST)
 
     if form.is_valid():
-        # Is this source or target comment?
-        if form.cleaned_data["scope"] in {"global", "report"}:
-            scope = unit.source_unit
-        # Create comment object
-        Comment.objects.add(scope, request, form.cleaned_data["comment"])
-        # Add review label/flag
-        if form.cleaned_data["scope"] == "report":
-            if component.has_template():
-                if scope.translated and not scope.readonly:
-                    scope.translate(
-                        request.user,
-                        scope.target,
-                        STATE_FUZZY,
-                        change_action=ActionEvents.MARKED_EDIT,
-                    )
-            else:
-                label = component.project.label_set.get_or_create(
-                    name=gettext_noop("Source needs review"), defaults={"color": "red"}
-                )[0]
-                scope.labels.add(label)
+        text = form.cleaned_data["comment"]
+        scope = form.cleaned_data["scope"]
+        Comment.objects.add(request, unit, text, scope)
         messages.success(request, gettext("Posted new comment"))
     else:
+        show_form_errors(request, form)
         messages.error(request, gettext("Could not add comment!"))
 
     return redirect_next(request.POST.get("next"), unit)
@@ -896,6 +893,8 @@ def get_zen_unitdata(obj, project, unit_set, request: AuthenticatedHttpRequest):
     units = unit_set.prefetch_full().get_ordered(
         search_result["ids"][offset : offset + 20]
     )
+    fill_in_source_translation(units)
+    fetch_glossary_terms(units)
 
     unitdata = [
         {
@@ -924,7 +923,6 @@ def zen(request: AuthenticatedHttpRequest, path):
     project = context["project"]
 
     search_result, unitdata = get_zen_unitdata(obj, project, unit_set, request)
-    sort = get_sort_name(request, obj)
 
     # Handle redirects
     if isinstance(search_result, HttpResponse):
@@ -941,9 +939,7 @@ def zen(request: AuthenticatedHttpRequest, path):
             "unitdata": unitdata,
             "search_query": search_result["query"],
             "filter_count": len(search_result["ids"]),
-            "filter_pos": 0,
-            "sort_name": sort["name"],
-            "sort_query": sort["query"],
+            "filter_pos": search_result["offset"],
             "last_section": search_result["last_section"],
             "search_url": search_result["url"],
             "offset": search_result["offset"],
@@ -1098,7 +1094,6 @@ def browse(request: AuthenticatedHttpRequest, path):
         search_result["url"],
     )
     num_results = ceil(len(search_result["ids"]) / page)
-    sort = get_sort_name(request, obj)
 
     return render(
         request,
@@ -1121,7 +1116,5 @@ def browse(request: AuthenticatedHttpRequest, path):
             else None,
             "prev_unit_url": base_unit_url + str(offset - 1) if offset > 1 else None,
             "is_in_browse": True,
-            "sort_name": sort["name"],
-            "sort_query": sort["query"],
         },
     )

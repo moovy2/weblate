@@ -24,13 +24,13 @@ from weblate.trans.forms import (
     SearchForm,
 )
 from weblate.trans.models import Category, Component, Project, Translation, Unit
+from weblate.trans.models.unit import fill_in_source_translation
 from weblate.trans.util import render
 from weblate.utils import messages
 from weblate.utils.ratelimit import check_rate_limit
 from weblate.utils.stats import CategoryLanguage, ProjectLanguage
 from weblate.utils.views import (
     get_paginator,
-    get_sort_name,
     import_message,
     parse_path_units,
     show_form_errors,
@@ -84,6 +84,7 @@ def search_replace(request: AuthenticatedHttpRequest, path):
 
         if not confirm.is_valid():
             for unit in matching:
+                # This is rendered using format_unit_target which does split_plurals
                 unit.replacement = unit.target.replace(search_text, replacement)
             context.update(
                 {
@@ -105,7 +106,10 @@ def search_replace(request: AuthenticatedHttpRequest, path):
                     continue
                 unit.translate(
                     request.user,
-                    unit.target.replace(search_text, replacement),
+                    [
+                        plural.replace(search_text, replacement)
+                        for plural in unit.get_target_plurals()
+                    ],
                     unit.state,
                     change_action=ActionEvents.REPLACE,
                 )
@@ -129,8 +133,6 @@ def search_replace(request: AuthenticatedHttpRequest, path):
 def search(request: AuthenticatedHttpRequest, path=None):
     """Perform site-wide search on units."""
     is_ratelimited = not check_rate_limit("search", request)
-    search_form = SearchForm(user=request.user, data=request.GET)
-    sort = get_sort_name(request)
     obj, unit_set, context = parse_path_units(
         request,
         path,
@@ -146,13 +148,14 @@ def search(request: AuthenticatedHttpRequest, path=None):
         ),
     )
 
+    search_form = SearchForm(request=request, data=request.GET, obj=obj)
     context["search_form"] = search_form
     context["back_url"] = obj.get_absolute_url() if obj is not None else None
 
     if not is_ratelimited and request.GET and search_form.is_valid():
         # This is ugly way to hide query builder when showing results
         search_form = SearchForm(
-            user=request.user, data=request.GET, show_builder=False
+            request=request, data=request.GET, show_builder=False, obj=obj
         )
         search_form.is_valid()
         units = unit_set.prefetch_bulk().search(
@@ -170,6 +173,8 @@ def search(request: AuthenticatedHttpRequest, path=None):
         units = get_paginator(
             request, units.order_by_request(search_form.cleaned_data, obj)
         )
+        # Make sure source translation is available
+        fill_in_source_translation(units)
         # Rebuild context from scratch here to get new form
         context.update(
             {
@@ -182,8 +187,6 @@ def search(request: AuthenticatedHttpRequest, path=None):
                 "search_url": search_form.urlencode(),
                 "search_query": search_form.cleaned_data["q"],
                 "search_items": search_form.items(),
-                "sort_name": sort["name"],
-                "sort_query": sort["query"],
                 "total_strings": total_strings,
                 "total_words": total_words,
             }

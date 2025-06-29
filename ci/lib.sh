@@ -18,7 +18,7 @@ check() {
 }
 
 run_coverage() {
-    uv run --no-sources --all-extras coverage run --source . --append "$@"
+    uv run --all-extras coverage run --source . --append "$@"
 }
 
 get_mysql_args() {
@@ -75,4 +75,26 @@ print_version() {
         fi
     done
     echo "not found..."
+}
+
+semver_compare() {
+    [ "$#" -eq 3 ] || {
+        printf 'semver_compare: invalid number of arguments\n' >&2
+        return 2
+    }
+
+    ver1=$1
+    op=$2
+    ver2=$3
+
+    if [ "$ver1" = "$ver2" ]; then
+        [ "$op" = "=" ] || [ "$op" = "<=" ] || [ "$op" = ">=" ]
+        return
+    fi
+
+    if printf '%s\n' "$ver1" "$ver2" | sort -C -V; then
+        [ "$op" = "<" ] || [ "$op" = "<=" ]
+    else
+        [ "$op" = ">" ] || [ "$op" = ">=" ]
+    fi
 }

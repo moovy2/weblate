@@ -105,6 +105,7 @@ LANGUAGE_CODE = "en-us"
 LANGUAGES = (
     ("ar", "العربية"),
     ("az", "Azərbaycan"),
+    ("ba", "башҡорт теле"),
     ("be", "Беларуская"),
     ("be-latn", "Biełaruskaja"),
     ("bg", "Български"),
@@ -888,10 +889,6 @@ LOGGING: dict = {
             # Toggle to DEBUG to log all database queries
             "level": get_env_str("WEBLATE_LOGLEVEL_DATABASE", "CRITICAL"),
         },
-        "redis_lock": {
-            "handlers": [*DEFAULT_LOG],
-            "level": DEFAULT_LOGLEVEL,
-        },
         "weblate": {
             "handlers": [*DEFAULT_LOG],
             "level": DEFAULT_LOGLEVEL,
@@ -987,11 +984,12 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 50000000
 # Allow more fields for case with a lot of subscriptions in profile
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
 
-# Apply session coookie settings to language cookie as ewll
+# Apply session coookie settings to language cookie as well with exception
+# of SameSite as we want language to be honored in CSRF error messages.
 LANGUAGE_COOKIE_SECURE = SESSION_COOKIE_SECURE
 LANGUAGE_COOKIE_HTTPONLY = SESSION_COOKIE_HTTPONLY
 LANGUAGE_COOKIE_AGE = SESSION_COOKIE_AGE_AUTHENTICATED * 10
-LANGUAGE_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
+LANGUAGE_COOKIE_SAMESITE = "None"
 
 # Some security headers
 SECURE_BROWSER_XSS_FILTER = True
@@ -1087,6 +1085,7 @@ CHECK_LIST = [
     "weblate.checks.chars.MaxLengthCheck",
     "weblate.checks.chars.KashidaCheck",
     "weblate.checks.chars.PunctuationSpacingCheck",
+    "weblate.checks.chars.KabyleCharactersCheck",
     "weblate.checks.format.PythonFormatCheck",
     "weblate.checks.format.PythonBraceFormatCheck",
     "weblate.checks.format.PHPFormatCheck",
@@ -1191,6 +1190,7 @@ WEBLATE_ADDONS = [
     "weblate.addons.yaml.YAMLCustomizeAddon",
     "weblate.addons.cdn.CDNJSAddon",
     "weblate.addons.webhooks.WebhookAddon",
+    "weblate.addons.webhooks.SlackWebhookAddon",
 ]
 modify_env_list(WEBLATE_ADDONS, "ADDONS")
 
@@ -1242,7 +1242,7 @@ REDIS_PROTO = "rediss" if get_env_bool("REDIS_TLS") else "redis"
 # Configuration for caching
 CACHES = {
     "default": {
-        "BACKEND": "redis_lock.django_cache.RedisCache",
+        "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": "{}://{}:{}/{}".format(
             REDIS_PROTO,
             get_env_str("REDIS_HOST", "cache", required=True),
@@ -1386,12 +1386,13 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_BROKER_CONNECTION_RETRY = True
 
 # Celery settings, it is not recommended to change these
-CELERY_WORKER_MAX_MEMORY_PER_CHILD = 200000
+CELERY_WORKER_MAX_MEMORY_PER_CHILD = 450000 if DEBUG else 250000
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_TASK_ROUTES = {
     "weblate.trans.tasks.auto_translate*": {"queue": "translate"},
     "weblate.accounts.tasks.notify_*": {"queue": "notify"},
     "weblate.accounts.tasks.send_mails": {"queue": "notify"},
+    "weblate.addons.tasks.addon_change": {"queue": "notify"},
     "weblate.utils.tasks.settings_backup": {"queue": "backup"},
     "weblate.utils.tasks.database_backup": {"queue": "backup"},
     "weblate.wladmin.tasks.backup": {"queue": "backup"},

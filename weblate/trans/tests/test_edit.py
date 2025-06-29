@@ -364,12 +364,12 @@ class EditResourceTest(EditTest):
         # Add new string
         response = self.add_unit("key")
         self.assertContains(response, "New string has been added")
-        self.assertEqual(Unit.objects.filter(pending=True).count(), 1)
+        self.assertEqual(Unit.objects.filter(pending_changes__isnull=False).count(), 1)
         self.assertEqual(Unit.objects.filter(context="key").count(), 2)
 
         # Edit unit
         self.edit_unit(source=self.new_source_string, target="Překlad")
-        self.assertEqual(Unit.objects.filter(pending=True).count(), 2)
+        self.assertEqual(Unit.objects.filter(pending_changes__isnull=False).count(), 2)
 
         # Commit to the file
         if commit_translation:
@@ -377,12 +377,12 @@ class EditResourceTest(EditTest):
             translation.commit_pending("test", None)
         else:
             self.component.commit_pending("test", None)
-        self.assertEqual(Unit.objects.filter(pending=True).count(), 0)
+        self.assertEqual(Unit.objects.filter(pending_changes__isnull=False).count(), 0)
         self.assertEqual(Unit.objects.filter(context="key").count(), 2)
         self.assertEqual(
             Unit.objects.filter(context="key", state=STATE_TRANSLATED).count(), 2
         )
-        self.component.create_translations(force=True)
+        self.component.create_translations_immediate(force=True)
         self.assertEqual(
             Unit.objects.filter(context="key", state=STATE_TRANSLATED).count(), 2
         )
@@ -1193,7 +1193,7 @@ class EditSourceTest(ViewTestCase):
         )
 
         # Check sync should be no-op now
-        self.component.create_translations()
+        self.component.create_translations_immediate()
 
         # Check that translation was preserved
         self.assertEqual(

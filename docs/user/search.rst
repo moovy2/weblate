@@ -53,7 +53,7 @@ Fields
 ``pending:BOOLEAN``
    String pending for flushing to VCS.
 ``has:TEXT``
-   Search for string having attributes - ``plural``, ``context``, ``suggestion``, ``comment``, ``check``, ``dismissed-check``, ``translation``, ``variant``, ``screenshot``, ``flags``, ``explanation``, ``glossary``, ``note``, ``label``.
+   Search for string having attributes - ``plural``, ``context``, ``suggestion``, ``comment``, ``check``, ``dismissed-check``, ``translation``, ``variant``, ``screenshot``, ``flags``, ``explanation``, ``glossary``, ``note``, ``label``, ``location``.
 ``is:TEXT``
    Filters string on a condition:
 
@@ -112,6 +112,8 @@ Fields
    Search in labels.
 ``screenshot:TEXT``
    Search in screenshots.
+``labels_count:NUMBER``
+   Filter by count of labels
 
 .. _search-boolean:
 
@@ -252,9 +254,10 @@ Additional lookups are available in the :ref:`management-interface`:
 Fuzzy values for DATETIME fields
 ++++++++++++++++++++++++++++++++
 
-Instead of using DATETIME values like MM-DD-YYYY, a string containing adverb
-of time like ``yesterday``, ``last month``, and ``2 days ago`` can be used as
-values in the DATETIME fields.
+Instead of using DATETIME values like MM-DD-YYYY, a string containing an adverb
+of time like :samp:`yesterday`, :samp:`last month`, and :samp:`2 days ago` can
+be used as values in the DATETIME fields. Only English phrases are supported
+here.
 
 Examples:
 
