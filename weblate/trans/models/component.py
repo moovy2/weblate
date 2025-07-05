@@ -37,6 +37,7 @@ from weblate.checks.flags import Flags
 from weblate.checks.models import CHECKS
 from weblate.formats.models import FILE_FORMATS
 from weblate.lang.models import Language, get_default_lang
+from weblate.memory.tasks import import_memory
 from weblate.trans.actions import ActionEvents
 from weblate.trans.defines import (
     BRANCH_LENGTH,
@@ -55,6 +56,7 @@ from weblate.trans.mixins import (
 )
 from weblate.trans.models.alert import ALERTS, ALERTS_IMPORT, Alert, update_alerts
 from weblate.trans.models.change import Change
+from weblate.trans.models.pending import PendingUnitChange
 from weblate.trans.models.translation import Translation
 from weblate.trans.models.variant import Variant
 from weblate.trans.signals import (
@@ -93,7 +95,7 @@ from weblate.utils.licenses import (
     get_license_url,
     is_libre,
 )
-from weblate.utils.lock import WeblateLock, WeblateLockTimeoutError
+from weblate.utils.lock import WeblateLock
 from weblate.utils.random import get_random_identifier
 from weblate.utils.render import (
     render_template,
@@ -544,6 +546,14 @@ class Component(
             "will cause automatic translation in this one"
         ),
     )
+    contribute_project_tm = models.BooleanField(
+        verbose_name=gettext_lazy("Contribute to project translation memory"),
+        default=True,
+        help_text=gettext_lazy(
+            "Allow this component's translations to be added to the project-level"
+            " translation memory."
+        ),
+    )
     # This should match definition in WorkflowSetting
     enable_suggestions = models.BooleanField(
         verbose_name=gettext_lazy("Turn on suggestions"),
@@ -780,6 +790,9 @@ class Component(
         verbose_name=gettext_lazy("Use as a glossary"),
         default=False,
         db_index=True,
+        help_text=gettext_lazy(
+            "Glossaries are different from regular translations but help keep track of and share consistent terminology."
+        ),
     )
     glossary_color = models.CharField(
         verbose_name=gettext_lazy("Glossary color"),
@@ -870,6 +883,7 @@ class Component(
         self._invalidate_scheduled = False
         self._alerts_scheduled = False
         self._template_check_done = False
+        self._glossary_sync_scheduled = False
         self.new_lang_error_message: str | None = None
 
     def save(self, *args, **kwargs) -> None:
@@ -896,6 +910,8 @@ class Component(
         # Sets the key_filter to blank if the file format is bilingual
         if self.key_filter and not self.has_template():
             self.key_filter = ""
+
+        update_tm = self.contribute_project_tm
 
         if self.id:
             old = Component.objects.get(pk=self.id)
@@ -941,6 +957,9 @@ class Component(
             )
 
             create = False
+
+            # detect if the component had TM contribution disabled but changed to enabled
+            update_tm = self.contribute_project_tm and not old.contribute_project_tm
         elif self.is_glossary:
             # Creating new glossary
 
@@ -1001,6 +1020,9 @@ class Component(
         self.project.invalidate_source_language_cache()
         for project in self.links.all():
             project.invalidate_source_language_cache()
+
+        if update_tm:
+            import_memory.delay_on_commit(self.project.id, self.pk)
 
     def generate_changes(self, old) -> None:
         def getvalue(base, attribute):
@@ -1758,7 +1780,7 @@ class Component(
 
         if result:
             # create translation objects for all files
-            self.create_translations(request=request, run_async=True)
+            self.create_translations(request=request)
 
             # Push after possible merge
             self.push_if_needed(do_update=False)
@@ -1956,7 +1978,7 @@ class Component(
             self.trigger_post_update(previous_head, False)
 
             # create translation objects for all files
-            self.create_translations(request=request, force=True, run_async=True)
+            self.create_translations(request=request, force=True)
             return True
 
     @perform_on_link
@@ -1982,22 +2004,25 @@ class Component(
 
     @perform_on_link
     @transaction.atomic
-    def do_file_sync(self, request=None):
+    def do_file_sync(self, request=None) -> None:
         from weblate.trans.models import Unit
+        from weblate.trans.tasks import perform_commit
 
-        Unit.objects.filter(
+        for unit in Unit.objects.filter(
             Q(translation__component=self)
             | Q(translation__component__linked_component=self)
-        ).exclude(
-            translation__language_id=self.source_language_id
-        ).select_for_update().update(pending=True)
-        return self.commit_pending("file-sync", request.user if request else None)
+        ).exclude(translation__language_id=self.source_language_id):
+            PendingUnitChange.store_unit_change(unit)
+
+        perform_commit.delay_on_commit(
+            self.pk, "file-sync", user_id=request.user.id if request else None
+        )
 
     @perform_on_link
     @transaction.atomic
-    def do_file_scan(self, request=None):
+    def do_file_scan(self, request=None) -> bool:
         self.commit_pending("file-scan", request.user if request else None)
-        self.create_translations(request=request, force=True, run_async=True)
+        self.create_translations(request=request, force=True)
         return True
 
     def get_repo_link_url(self):
@@ -2028,6 +2053,7 @@ class Component(
         self, reason: str, user: User | None, skip_push: bool = False
     ) -> bool:
         """Check whether there is any translation to be committed."""
+        from weblate.auth.models import User
 
         def reuse_self(translation):
             if translation.component_id == self.id:
@@ -2038,9 +2064,14 @@ class Component(
                 translation = translation.component.source_translation
             return translation
 
+        if user is None:
+            user = User.objects.get_or_create_bot(
+                scope="weblate", name="commit", verbose="Background commit"
+            )
+
         # Get all translation with pending changes, source translation first
         translations = sorted(
-            Translation.objects.filter(unit__pending=True)
+            Translation.objects.filter(unit__pending_changes__isnull=False)
             .filter(Q(component=self) | Q(component__linked_component=self))
             .distinct()
             .prefetch_related("component"),
@@ -2385,9 +2416,14 @@ class Component(
                 and self.auto_lock_error
                 and alert in LOCKING_ALERTS
                 and not self.alert_set.filter(name__in=LOCKING_ALERTS).exists()
-                and self.change_set.filter(action=ActionEvents.LOCK)
-                .order_by("-id")[0]
-                .auto_status
+                and getattr(
+                    # The object might not exist
+                    self.change_set.filter(action=ActionEvents.LOCK)
+                    .order_by("-id")
+                    .first(),
+                    "auto_status",
+                    None,
+                )
             ):
                 self.do_lock(user=None, lock=False, auto=True)
 
@@ -2429,28 +2465,29 @@ class Component(
 
     def create_translations(
         self,
+        *,
         force: bool = False,
+        force_scan: bool = False,
         langs: list[str] | None = None,
         request=None,
         changed_template: bool = False,
         from_link: bool = False,
         change: int | None = None,
-        run_async: bool = False,
     ) -> bool:
         """Load translations from VCS."""
-        if not run_async or settings.CELERY_TASK_ALWAYS_EAGER:
-            try:
-                # Asynchronous processing not requested or not available, run the update
-                # directly from the request processing.
-                # NOTE: In case the lock cannot be acquired, an error will be raised.
-                return self.create_translations_task(
-                    force, langs, request, changed_template, from_link, change
-                )
-            except WeblateLockTimeoutError:
-                if settings.CELERY_TASK_ALWAYS_EAGER:
-                    # Retry will not address anything
-                    raise
-                # Else, fall back to asynchronous process.
+        if settings.CELERY_TASK_ALWAYS_EAGER:
+            # Asynchronous processing not available, run the update
+            # directly from the request processing.
+            # NOTE: In case the lock cannot be acquired, an error will be raised.
+            return self.create_translations_immediate(
+                force=force,
+                force_scan=force_scan,
+                langs=langs,
+                request=request,
+                changed_template=changed_template,
+                from_link=from_link,
+                change=change,
+            )
 
         from weblate.trans.tasks import perform_load
 
@@ -2458,6 +2495,7 @@ class Component(
         perform_load.delay_on_commit(
             pk=self.pk,
             force=force,
+            force_scan=force_scan,
             langs=langs,
             changed_template=changed_template,
             from_link=from_link,
@@ -2465,9 +2503,11 @@ class Component(
         )
         return False
 
-    def create_translations_task(
+    def create_translations_immediate(
         self,
+        *,
         force: bool = False,
+        force_scan: bool = False,
         langs: list[str] | None = None,
         request=None,
         changed_template: bool = False,
@@ -2482,7 +2522,13 @@ class Component(
         # In case the lock cannot be acquired, an error will be raised.
         with self.lock, self.start_sentry_span("create_translations"):  # pylint: disable=not-context-manager
             return self._create_translations(
-                force, langs, request, changed_template, from_link, change
+                force=force,
+                force_scan=force_scan,
+                langs=langs,
+                request=request,
+                changed_template=changed_template,
+                from_link=from_link,
+                change=change,
             )
 
     def check_template_valid(self) -> None:
@@ -2498,7 +2544,9 @@ class Component(
 
     def _create_translations(  # noqa: C901,PLR0915
         self,
+        *,
         force: bool = False,
+        force_scan: bool = False,
         langs: list[str] | None = None,
         request=None,
         changed_template: bool = False,
@@ -2517,6 +2565,7 @@ class Component(
             self.processed_revision == current_revision
             and self.local_revision
             and not force
+            and not force_scan
         ):
             self.log_info("this revision has been already parsed, skipping update")
             self.progress_step(100)
@@ -2654,8 +2703,8 @@ class Component(
             component.translations_count = -1
             try:
                 # Do not run these linked repos update as other background tasks.
-                was_change |= component.create_translations_task(
-                    force, langs, request=request, from_link=True
+                was_change |= component.create_translations_immediate(
+                    force=force, langs=langs, request=request, from_link=True
                 )
             except FileParseError as error:
                 if not isinstance(error.__cause__, FileNotFoundError):
@@ -2771,14 +2820,20 @@ class Component(
             return code.split(".")[0]
         return code
 
-    def sync_git_repo(self, validate: bool = False, skip_push: bool = False) -> None:
+    def sync_git_repo(
+        self,
+        *,
+        validate: bool = False,
+        skip_push: bool = False,
+        skip_commit: bool = False,
+    ) -> None:
         """Bring VCS repo in sync with current model."""
         if self.is_repo_link:
             return
         if skip_push is None:
             skip_push = validate
         self.configure_repo(validate)
-        if self.id:
+        if not skip_commit and self.id:
             self.commit_pending("sync", None, skip_push=skip_push)
         self.configure_branch()
         if self.id:
@@ -3247,7 +3302,7 @@ class Component(
         # Configure git repo if there were changes
         if changed_git:
             # Bring VCS repo in sync with current model
-            self.sync_git_repo(skip_push=skip_push)
+            self.sync_git_repo(skip_push=skip_push, skip_commit=create)
 
         # Create template in case intermediate file is present
         self.create_template_if_missing()
@@ -3257,10 +3312,10 @@ class Component(
         was_change = False
         if changed_setup:
             was_change = self.create_translations(
-                force=True, changed_template=changed_template, run_async=True
+                force=True, changed_template=changed_template
             )
         elif changed_git:
-            was_change = self.create_translations(run_async=True)
+            was_change = self.create_translations()
 
         # Update variants (create_translation does this on change)
         if changed_variant and not was_change:
@@ -3384,14 +3439,13 @@ class Component(
 
     @property
     def pending_units(self):
-        from weblate.trans.models import Unit
-
-        return Unit.objects.filter(translation__component=self, pending=True)
+        """Return queryset with pending units."""
+        return PendingUnitChange.objects.for_component(self)
 
     @property
     def count_pending_units(self):
-        """Check for uncommitted changes."""
-        return self.pending_units.count()
+        """Return count of pending units."""
+        return PendingUnitChange.objects.for_component(self).count()
 
     @property
     def count_repo_missing(self):
@@ -3617,16 +3671,18 @@ class Component(
         return code
 
     @transaction.atomic
-    def add_new_language(
+    def add_new_language(  # noqa: C901
         self,
         language,
         request,
         send_signal: bool = True,
         create_translations: bool = True,
+        show_messages: bool = True,
     ) -> Translation | None:
         """Create new language file."""
         if not self.can_add_new_language(request.user if request else None):
-            messages.error(request, self.new_lang_error_message, fail_silently=True)
+            if show_messages:
+                messages.error(request, self.new_lang_error_message)
             return None
 
         file_format = self.file_format_cls
@@ -3638,28 +3694,27 @@ class Component(
         new_lang = Language.objects.fuzzy_get_strict(code=self.get_language_alias(code))
         if new_lang is not None:
             if new_lang == self.source_language:
-                messages.error(
-                    request,
-                    gettext("The given language is used as a source language."),
-                    fail_silently=True,
-                )
+                if show_messages:
+                    messages.error(
+                        request,
+                        gettext("The given language is used as a source language."),
+                    )
                 return None
 
             if self.translation_set.filter(language=new_lang).exists():
-                messages.error(
-                    request,
-                    gettext("The given language already exists."),
-                    fail_silently=True,
-                )
+                if show_messages:
+                    messages.error(
+                        request, gettext("The given language already exists.")
+                    )
                 return None
 
         # Check if language code is valid
         if re.match(self.language_regex, code) is None:
-            messages.error(
-                request,
-                gettext("The given language is filtered by the language filter."),
-                fail_silently=True,
-            )
+            if show_messages:
+                messages.error(
+                    request,
+                    gettext("The given language is filtered by the language filter."),
+                )
             return None
 
         base_filename = self.get_new_base_filename()
@@ -3690,11 +3745,8 @@ class Component(
                 # Ignore request if file exists (possibly race condition as
                 # the processing of new language can take some time and user
                 # can submit again)
-                messages.error(
-                    request,
-                    gettext("Translation file already exists!"),
-                    fail_silently=True,
-                )
+                if show_messages:
+                    messages.error(request, gettext("Translation file already exists!"))
             else:
                 file_format.add_language(
                     fullname,
@@ -3721,12 +3773,14 @@ class Component(
 
         # Trigger parsing of the newly added file
         if create_translations:
-            self.create_translations(request=request, run_async=True)
-            messages.info(
-                request,
-                gettext("The translation will be updated in the background."),
-                fail_silently=True,
-            )
+            # Forced scanning is needed in case adding file does not trigger commit,
+            # for example when adding appstore metadata which only creates directory.
+            self.create_translations(request=request, force_scan=True)
+            if show_messages:
+                messages.info(
+                    request,
+                    gettext("The translation will be updated in the background."),
+                )
 
         # Delete no matches alert as we have just added the file
         self.delete_alert("NoMaskMatches")
@@ -3756,7 +3810,9 @@ class Component(
             details={"auto": auto},
         )
         if lock and not auto:
-            perform_commit.delay_on_commit(self.pk, "lock", None)
+            perform_commit.delay_on_commit(
+                self.pk, "lock", user_id=user.id if user else None
+            )
         return change
 
     @cached_property
@@ -3771,11 +3827,12 @@ class Component(
         # Override Django implementation as that rebuilds the dict every time
         return get_license_name(self.license)
 
-    def post_create(self, user: User) -> None:
+    def post_create(self, user: User, *, origin: str) -> None:
         self.change_set.create(
             action=ActionEvents.CREATE_COMPONENT,
             user=user,
             author=user,
+            details={"origin": origin},
         )
 
     @property
@@ -3820,7 +3877,8 @@ class Component(
             else:
                 for glossary in self.project.glossaries:
                     sync_glossary_languages(glossary.pk, component=glossary)
-        else:
+        elif not self._glossary_sync_scheduled:
+            self._glossary_sync_scheduled = True
             transaction.on_commit(self._schedule_sync_terminology)
 
     def _schedule_sync_terminology(self) -> None:
@@ -3831,6 +3889,7 @@ class Component(
         else:
             for glossary in self.project.glossaries:
                 sync_glossary_languages.delay_on_commit(glossary.pk)
+        self._glossary_sync_scheduled = False
 
     def get_unused_enforcements(self) -> Iterable[dict | BaseCheck]:
         from weblate.trans.models import Unit
@@ -3932,7 +3991,7 @@ class Component(
         for unit in units.select_for_update():
             unit.translate(
                 None,
-                unit.target,
+                unit.get_target_plurals(),
                 STATE_FUZZY,
                 change_action=ActionEvents.ENFORCED_CHECK,
                 propagate=False,

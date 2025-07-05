@@ -733,7 +733,11 @@ sites without HTTPS.
 ENABLE_SHARING
 --------------
 
-Turn on/off the :guilabel:`Share` menu so users can share translation progress on social networks.
+Turn on/off the :guilabel:`Community` menu so users can share translation progress on social networks.
+
+.. seealso::
+
+   :ref:`promotion`
 
 .. setting:: EXTRA_HTML_HEAD
 
@@ -1748,6 +1752,15 @@ SENTRY_ENVIRONMENT
 ------------------
 
 Configures environment for Sentry. Defaults to ``devel``.
+
+.. setting:: SENTRY_MONITOR_BEAT_TASKS
+
+SENTRY_MONITOR_BEAT_TASKS
+-------------------------
+
+.. versionadded:: 5.13
+
+Configure whether to monitor Celery Beat tasks with Sentry. Defaults to ``True``.
 
 .. setting:: SENTRY_PROFILES_SAMPLE_RATE
 

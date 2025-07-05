@@ -29,8 +29,11 @@ from weblate.memory.utils import is_valid_memory_entry
 from weblate.trans.actions import ActionEvents
 from weblate.trans.autofixes import fix_target
 from weblate.trans.mixins import LoggerMixin
+from weblate.trans.models.category import Category
 from weblate.trans.models.change import Change
 from weblate.trans.models.comment import Comment
+from weblate.trans.models.pending import PendingUnitChange
+from weblate.trans.models.project import Project
 from weblate.trans.models.suggestion import Suggestion
 from weblate.trans.models.variant import Variant
 from weblate.trans.signals import unit_pre_create
@@ -79,6 +82,18 @@ SIMPLE_FILTERS: dict[str, dict[str, Any]] = {
 }
 
 NEWLINES = re.compile(r"\r\n|\r|\n")
+
+
+def fill_in_source_translation(units: Iterable[Unit]) -> None:
+    """
+    Inject source translation intro component from the source unit.
+
+    This materializes the query.
+
+    This assumes prefetch_source() was called before on the query.
+    """
+    for unit in units:
+        unit.translation.component.source_translation = unit.source_unit.translation
 
 
 class UnitQuerySet(models.QuerySet):
@@ -143,8 +158,7 @@ class UnitQuerySet(models.QuerySet):
 
         This assumes prefetch_source() was called before on the query.
         """
-        for unit in self:
-            unit.translation.component.source_translation = unit.source_unit.translation
+        fill_in_source_translation(self)
         return self
 
     def prefetch_all_checks(self):
@@ -181,26 +195,12 @@ class UnitQuerySet(models.QuerySet):
         """Prefetch useful for bulk editing."""
         return self.prefetch_full().prefetch_related("defined_variants")
 
-    def prefetch_recent_content_changes(self):
-        """
-        Prefetch recent content changes.
-
-        This is used in commit pending, where we need this
-        for all pending units.
-        """
-        return self.prefetch_related(
-            models.Prefetch(
-                "change_set",
-                queryset=Change.objects.content().order().prefetch_related("author"),
-                to_attr="recent_content_changes",
-            )
-        )
-
     def search(self, query, **context) -> UnitQuerySet:
         """High level wrapper for searching."""
         from weblate.utils.search import parse_query
 
-        result = self.filter(parse_query(query, **context))
+        filters, annotations = parse_query(query, **context)
+        result = self.annotate(**annotations).filter(filters)
         return result.distinct()
 
     def same(self, unit: Unit, exclude: bool = True) -> UnitQuerySet:
@@ -228,6 +228,7 @@ class UnitQuerySet(models.QuerySet):
         translation = unit.translation
         component = translation.component
         result = self.filter(
+            state__gte=STATE_TRANSLATED,
             target__lower__md5=MD5(Lower(Value(target))),
             target=target,
             translation__component__project_id=component.project_id,
@@ -254,6 +255,7 @@ class UnitQuerySet(models.QuerySet):
             "source",
             "target",
             "location",
+            "component",
         ]
         countable_sort_choices: dict[str, dict[str, Any]] = {
             "num_comments": {"order_by": "comment__count", "filter": None},
@@ -274,12 +276,30 @@ class UnitQuerySet(models.QuerySet):
                     countable_sort_choices[unsigned_choice]["filter"],
                 )
             if unsigned_choice in available_sort_choices:
+                if unsigned_choice == "component":
+                    sign = "-" if choice[0] == "-" else ""
+                    sort_list.extend(
+                        [
+                            sign + "translation__component__priority",
+                            sign + "translation__component__is_glossary",
+                            sign + "translation__component__name",
+                        ]
+                    )
+                    continue
+
                 if unsigned_choice == "labels":
                     choice = choice.replace("labels", "max_labels_name")
                 sort_list.append(choice)
         if not sort_list:
             if hasattr(obj, "component") and obj.component.is_glossary:
                 sort_list = ["source"]
+            elif isinstance(obj, Project | Category):
+                sort_list = [
+                    "translation__component__priority",
+                    "translation__component__is_glossary",
+                    "translation__component__name",
+                    "-priority",
+                ]
             else:
                 sort_list = ["-priority", "position"]
         if "max_labels_name" in sort_list or "-max_labels_name" in sort_list:
@@ -289,7 +309,7 @@ class UnitQuerySet(models.QuerySet):
         return self.order_by(*sort_list)
 
     def order_by_count(self, choice: str, count_filter) -> UnitQuerySet:
-        model = choice.split("__")[0].replace("-", "")
+        model = choice.split("__", 1)[0].replace("-", "")
         annotation_name = choice.replace("-", "")
         return self.annotate(
             **{annotation_name: Count(model, filter=count_filter)}
@@ -416,7 +436,6 @@ class Unit(models.Model, LoggerMixin):
 
     priority = models.IntegerField(default=100)
 
-    pending = models.BooleanField(default=False)
     timestamp = models.DateTimeField(auto_now_add=True)
     last_updated = models.DateTimeField(auto_now=True)
 
@@ -468,16 +487,6 @@ class Unit(models.Model, LoggerMixin):
             ),
             models.Index(
                 MD5(Lower("context")), "translation", name="trans_unit_context_md5"
-            ),
-            # Partial index for pending field to optimize lookup in translation
-            # commit pending method. Full table index performs poorly here because
-            # it becomes huge.
-            # MySQL/MariaDB does not supports condition and uses full index instead.
-            models.Index(
-                "translation",
-                "pending",
-                condition=Q(pending=True),
-                name="trans_unit_pending",
             ),
         ]
 
@@ -794,7 +803,15 @@ class Unit(models.Model, LoggerMixin):
             )
         self.source_unit = source_unit
 
-    def update_from_unit(self, unit, pos, created) -> None:  # noqa: C901
+    def update_from_unit(  # noqa: C901
+        self,
+        *,
+        unit: TranslationUnit,
+        pos: int,
+        created: bool,
+        user: User | None = None,
+        author: User | None = None,
+    ) -> None:
         """Update Unit from ttkit unit."""
         translation = self.translation
         component = translation.component
@@ -874,6 +891,10 @@ class Unit(models.Model, LoggerMixin):
                     # Store previous source and fuzzy flag for monolingual
                     if not previous_source:
                         source_change = previous_source = self.source
+                        # Keep prevoious source if already set in case source
+                        # changes multiple times
+                        if self.previous_source:
+                            previous_source = self.previous_source
                     state = STATE_FUZZY
                 pending = True
             elif (
@@ -921,7 +942,6 @@ class Unit(models.Model, LoggerMixin):
         self.context = context
         self.note = note
         self.previous_source = previous_source
-        self.pending = pending
         self.update_priority(save=False)
 
         # Metadata update only, these do not trigger any actions in Weblate and
@@ -947,6 +967,8 @@ class Unit(models.Model, LoggerMixin):
             same_content=same_source and same_target,
             run_checks=not same_source or not same_target or not same_state,
         )
+        if pending:
+            PendingUnitChange.store_unit_change(unit=self)
         # Track updated sources for source checks
         if translation.is_template:
             component.updated_sources[self.id] = self
@@ -954,8 +976,8 @@ class Unit(models.Model, LoggerMixin):
         if not same_source and source_change:
             translation.update_changes.append(
                 self.generate_change(
-                    None,
-                    None,
+                    user,
+                    author,
                     ActionEvents.SOURCE_CHANGE,
                     check_new=False,
                     old=source_change,
@@ -967,8 +989,8 @@ class Unit(models.Model, LoggerMixin):
         if not same_data:
             translation.update_changes.append(
                 self.generate_change(
-                    user=None,
-                    author=None,
+                    user,
+                    author,
                     change_action=translation.create_unit_change_action
                     if created
                     else translation.update_unit_change_action,
@@ -1105,13 +1127,14 @@ class Unit(models.Model, LoggerMixin):
                         )
                     continue
 
-                # Commit any previous pending changes
-                unit.commit_if_pending(user)
-
                 # Update unit attributes for the current instance, the database is bulk updated later
                 unit.target = self.target
                 unit.state = self.state
-                unit.pending = True
+
+                PendingUnitChange.store_unit_change(
+                    unit=unit,
+                    author=author,
+                )
 
                 to_update.append(unit)
 
@@ -1139,7 +1162,6 @@ class Unit(models.Model, LoggerMixin):
                 target=self.target,
                 state=self.state,
                 original_state=self.state,
-                pending=True,
                 last_updated=self.last_updated,
             )
 
@@ -1164,16 +1186,6 @@ class Unit(models.Model, LoggerMixin):
 
             return True
 
-    def commit_if_pending(self, author: User | None) -> None:
-        """Commit possible previous changes on this unit."""
-        if self.pending:
-            change_author = self.get_last_content_change()[0]
-            if change_author != author:
-                # This intentionally discards user - the translating user
-                # has no control on what this does (it can even trigger update
-                # of the repo)
-                self.translation.commit_pending("pending unit", None)
-
     def save_backend(
         self,
         user: User | None,
@@ -1195,9 +1207,6 @@ class Unit(models.Model, LoggerMixin):
         # For case when authorship specified, use user
         author = author or user
 
-        # Commit possible previous changes on this unit
-        self.commit_if_pending(author)
-
         # Propagate to other projects
         # This has to be done before changing source for template
         was_propagated = False
@@ -1217,13 +1226,17 @@ class Unit(models.Model, LoggerMixin):
         ):
             return False
 
-        update_fields = ["target", "state", "original_state", "pending", "explanation"]
+        update_fields = ["target", "state", "original_state", "explanation"]
         if self.is_source and not self.translation.component.intermediate:
             self.source = self.target
             update_fields.extend(["source"])
 
         # Unit is pending for write
-        self.pending = True
+        PendingUnitChange.store_unit_change(
+            unit=self,
+            author=author,
+        )
+
         # Update translated flag (not fuzzy and at least one translation)
         translation = any(self.get_target_plurals())
         if self.state >= STATE_TRANSLATED and not translation:
@@ -1300,7 +1313,6 @@ class Unit(models.Model, LoggerMixin):
 
             # Find relevant units
             for unit in self.unit_set.exclude(id=self.id).prefetch().prefetch_bulk():
-                unit.commit_if_pending(author)
                 # Update source and number of words
                 unit.source = self.target
                 unit.num_words = self.num_words
@@ -1312,7 +1324,10 @@ class Unit(models.Model, LoggerMixin):
                 ):
                     # Unset fuzzy on reverted
                     unit.original_state = unit.state = STATE_TRANSLATED
-                    unit.pending = True
+                    PendingUnitChange.store_unit_change(
+                        unit=unit,
+                        author=author,
+                    )
                     unit.previous_source = ""
                 elif (
                     unit.original_state == STATE_FUZZY
@@ -1327,7 +1342,10 @@ class Unit(models.Model, LoggerMixin):
                     unit.original_state = STATE_FUZZY
                     if unit.state < STATE_READONLY:
                         unit.state = STATE_FUZZY
-                        unit.pending = True
+                        PendingUnitChange.store_unit_change(
+                            unit=unit,
+                            author=author,
+                        )
                     unit.previous_source = previous_source
 
                 # Save unit
@@ -1365,6 +1383,7 @@ class Unit(models.Model, LoggerMixin):
         # Notify about new contributor
         if (
             check_new
+            and not self.is_batch_update
             and user is not None
             and not user.is_bot
             and not self.translation.change_set.filter(user=user).exists()
@@ -1980,16 +1999,31 @@ class Unit(models.Model, LoggerMixin):
             self.translation.component.file_format_cls.supports_explanation
         )
         units: Iterable[Unit] = []
+        if self.is_source:
+            units = self.unit_set.exclude(id=self.id).select_for_update()
+        # Mark change as pending if file format supports this
         if file_format_support:
-            if self.is_source:
-                units = self.unit_set.exclude(id=self.id).select_for_update()
-                units.update(pending=True)
-            else:
-                self.pending = True
-            # Always generate change for self
-            units = [*units, self]
+            for unit in units:
+                PendingUnitChange.store_unit_change(
+                    unit=unit,
+                    author=user,
+                )
+
+            # translation file does not exist for source strings in bilingual formats
+            if (
+                not self.is_source
+                or self.translation.component.file_format_cls.monolingual
+            ):
+                PendingUnitChange.store_unit_change(
+                    unit=self,
+                    author=user,
+                )
+
         if save:
-            self.save(update_fields=["explanation", "pending"], only_save=True)
+            self.save(update_fields=["explanation"], only_save=True)
+
+        # Always generate change for self
+        units = [*units, self]
 
         for unit in units:
             unit.generate_change(
@@ -2007,7 +2041,10 @@ class Unit(models.Model, LoggerMixin):
         self, extra_flags: str, user: User, save: bool = True
     ) -> None:
         """Update unit extra flags."""
+        verify_in_transaction()
         old = self.old_unit["extra_flags"]
+        if old == extra_flags:
+            return
         self.extra_flags = extra_flags
         units: Iterable[Unit] = []
         if self.is_source:
@@ -2052,3 +2089,7 @@ class Unit(models.Model, LoggerMixin):
             and is_valid_memory_entry(source=self.source, target=self.target)
         ):
             handle_unit_translation_change(self, user)
+
+    @property
+    def has_pending_changes(self) -> bool:
+        return self.pending_changes.exists()

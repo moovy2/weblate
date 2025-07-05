@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+import json
 import re
 from collections import defaultdict
 from datetime import date, datetime
@@ -10,12 +11,13 @@ from html import escape as html_escape
 from typing import TYPE_CHECKING
 
 from django import forms, template
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.humanize.templatetags.humanize import intcomma
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import number_format as django_number_format
-from django.utils.html import escape, format_html, format_html_join, urlize
+from django.utils.html import escape, format_html, format_html_join, linebreaks, urlize
 from django.utils.safestring import SafeString, mark_safe
 from django.utils.translation import gettext, gettext_lazy, ngettext, pgettext
 from siphashc import siphash
@@ -1485,49 +1487,72 @@ def get_glossary_badge(component: Component | GhostStats) -> StrOrPromise:
     return ""
 
 
-def get_breadcrumbs(path_object, flags: bool = True):
+def get_breadcrumbs(path_object, *, flags: bool = True, only_names: bool = False):
+    def with_url(name, url=None):
+        if only_names:
+            return name
+        if url is None:
+            url = path_object.get_absolute_url()
+        return url, name
+
     if isinstance(path_object, Unit):
-        yield from get_breadcrumbs(path_object.translation)
-        yield path_object.get_absolute_url(), path_object.pk
+        yield from get_breadcrumbs(
+            path_object.translation, flags=flags, only_names=only_names
+        )
+        yield with_url(path_object.pk)
     elif isinstance(path_object, Translation):
-        yield from get_breadcrumbs(path_object.component)
-        yield path_object.get_absolute_url(), path_object.language
+        yield from get_breadcrumbs(
+            path_object.component, flags=flags, only_names=only_names
+        )
+        yield with_url(path_object.language)
     elif isinstance(path_object, Component):
         if path_object.category:
-            yield from get_breadcrumbs(path_object.category)
+            yield from get_breadcrumbs(
+                path_object.category, flags=flags, only_names=only_names
+            )
         else:
-            yield from get_breadcrumbs(path_object.project)
+            yield from get_breadcrumbs(
+                path_object.project, flags=flags, only_names=only_names
+            )
         name = path_object.name
         if flags:
             name = format_html("{}{}", name, get_glossary_badge(path_object))
-        yield path_object.get_absolute_url(), name
+        yield with_url(name)
     elif isinstance(path_object, Category):
         if path_object.category:
-            yield from get_breadcrumbs(path_object.category)
+            yield from get_breadcrumbs(
+                path_object.category, flags=flags, only_names=only_names
+            )
         else:
-            yield from get_breadcrumbs(path_object.project)
-        yield path_object.get_absolute_url(), path_object.name
+            yield from get_breadcrumbs(
+                path_object.project, flags=flags, only_names=only_names
+            )
+        yield with_url(path_object.name)
     elif isinstance(path_object, Project):
-        yield path_object.get_absolute_url(), path_object.name
+        yield with_url(path_object.name)
     elif isinstance(path_object, Language):
-        yield reverse("languages"), gettext("Languages")
-        yield path_object.get_absolute_url(), path_object
+        yield with_url(gettext("Languages"), url=reverse("languages"))
+        yield with_url(path_object)
     elif isinstance(path_object, ProjectLanguage):
         yield (
-            f"{path_object.project.get_absolute_url()}#languages",
+            path_object.project.get_absolute_url(),
             path_object.project.name,
         )
-        yield path_object.get_absolute_url(), path_object.language
+        yield with_url(path_object.language)
     elif isinstance(path_object, CategoryLanguage):
         if path_object.category.category:
-            yield from get_breadcrumbs(path_object.category.category)
+            yield from get_breadcrumbs(
+                path_object.category.category, flags=flags, only_names=only_names
+            )
         else:
-            yield from get_breadcrumbs(path_object.category.project)
+            yield from get_breadcrumbs(
+                path_object.category.project, flags=flags, only_names=only_names
+            )
         yield (
-            f"{path_object.category.get_absolute_url()}#languages",
+            path_object.category.get_absolute_url(),
             path_object.category.name,
         )
-        yield path_object.get_absolute_url(), path_object.language
+        yield with_url(path_object.language)
     else:
         msg = f"No breadcrumbs for {path_object}"
         raise TypeError(msg)
@@ -1536,7 +1561,7 @@ def get_breadcrumbs(path_object, flags: bool = True):
 @register.simple_tag
 def path_object_breadcrumbs(path_object, flags: bool = True):
     return format_html_join(
-        "\n", '<li><a href="{}">{}</a></li>', get_breadcrumbs(path_object, flags)
+        "\n", '<li><a href="{}">{}</a></li>', get_breadcrumbs(path_object, flags=flags)
     )
 
 
@@ -1698,4 +1723,67 @@ def show_info(  # noqa: PLR0913
         "show_full_language": show_full_language,
         "top_users": top_users,
         "total_translations": total_translations,
+    }
+
+
+@register.filter(is_safe=True)
+def format_json(value: dict) -> str:
+    return mark_safe(  # noqa: S308
+        linebreaks(json.dumps(value, indent=4), autoescape=True)
+    )
+
+
+@register.filter(is_safe=True)
+def format_headers(value: dict[str, str]) -> str:
+    return format_html_join(mark_safe("<br>"), "<b>{}</b>: {}", value.items())
+
+
+@register.inclusion_tag("snippets/last-changes-content.html")
+def format_last_changes_content(
+    last_changes,
+    user: str | User,
+    in_email=False,
+    debug=False,
+    search_url=None,
+    offset=None,
+):
+    """
+    Format last changes content for display.
+
+    This is a simplified version of the prepare_last_changes_context function.
+    """
+    from weblate.trans.change_display import get_change_history_context
+
+    if isinstance(user, str):  # e.g in email digest
+        user = AnonymousUser()
+
+    processed_changes = []
+    for change in last_changes:
+        # Permissions
+        can_revert = change.can_revert() and user.has_perm("unit.edit", change.unit)
+        can_block_user = (
+            change.user
+            and not change.user.is_anonymous
+            and change.project
+            and change.user != user
+            and user.has_perm("project.permissions", change.project)
+        )
+
+        processed_changes.append(
+            {
+                "change": change,
+                "permissions": {
+                    "can_revert": can_revert,
+                    "can_block_user": can_block_user,
+                },
+                "ip_address": change.get_ip_address() if user.is_superuser else None,
+                "history_data": get_change_history_context(change),
+            }
+        )
+    return {
+        "changes_with_context": processed_changes,
+        "in_email": in_email,
+        "debug": debug,
+        "search_url": search_url,
+        "offset": offset,
     }

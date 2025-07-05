@@ -18,7 +18,7 @@ The project backups all translation content from Weblate (project, components,
 translations, string comments, suggestions or checks). It is suitable for
 transferring a project to another Weblate instance.
 
-You can perform a project backup in :guilabel:`Manage` ↓ :guilabel:`Backups`.
+You can perform a project backup in :guilabel:`Operations` ↓ :guilabel:`Backups`.
 The backup can be restored when creating a project (see
 :ref:`adding-projects`).
 
@@ -41,6 +41,8 @@ Use the generated file to import project when :ref:`adding-projects` or in :wlad
    :setting:`SIMPLIFY_LANGUAGES`. The restore will tell you which language
    codes could not be processed and you can then add missing language
    definitions manually.
+
+.. _automated-backup:
 
 Automated backup using BorgBackup
 ---------------------------------
@@ -170,6 +172,8 @@ via SSH using the Weblate SSH key:
 .. seealso::
 
    :ref:`weblate-ssh-key`, :doc:`borg:usage/general`
+
+.. _restore-borg:
 
 Restoring from BorgBackup
 -------------------------

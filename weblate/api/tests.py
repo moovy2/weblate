@@ -9,11 +9,13 @@ from io import BytesIO
 
 import responses
 from django.core.files import File
+from django.test.utils import modify_settings
 from django.urls import reverse
 from rest_framework.test import APITestCase
 from weblate_language_data.languages import LANGUAGES
 
 from weblate.accounts.models import Subscription
+from weblate.api.serializers import CommentSerializer
 from weblate.auth.models import Group, Role, User
 from weblate.lang.models import Language
 from weblate.memory.models import Memory
@@ -28,7 +30,7 @@ from weblate.trans.models import (
     Unit,
 )
 from weblate.trans.tests.test_models import fixup_languages_seq
-from weblate.trans.tests.utils import RepoTestMixin, get_test_file
+from weblate.trans.tests.utils import RepoTestMixin, create_test_billing, get_test_file
 from weblate.utils.data import data_dir
 from weblate.utils.django_hacks import immediate_on_commit, immediate_on_commit_leave
 from weblate.utils.state import STATE_EMPTY, STATE_TRANSLATED
@@ -72,6 +74,7 @@ class APIBaseTest(APITestCase, RepoTestMixin):
         self.project_kwargs = {"slug": "test"}
         self.tearDown()
         self.user = User.objects.create_user("apitest", "apitest@example.org", "x")
+        self.user.profile.languages.add(Language.objects.get(code="cs"))
         group = Group.objects.get(name="Users")
         self.user.groups.add(group)
 
@@ -128,14 +131,15 @@ class APIBaseTest(APITestCase, RepoTestMixin):
 class UserAPITest(APIBaseTest):
     def test_list(self) -> None:
         response = self.client.get(reverse("api:user-list"))
-        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["count"], 3)
         self.assertNotIn("email", response.data["results"][0])
         self.authenticate(True)
         response = self.client.get(reverse("api:user-list"))
-        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(response.data["count"], 3)
         self.assertIsNotNone(response.data["results"][0]["email"])
 
     def test_get(self) -> None:
+        language = Language.objects.get(code="cs")
         response = self.do_request(
             "api:user-detail",
             kwargs={"username": User.objects.filter(is_active=True)[0].username},
@@ -144,6 +148,10 @@ class UserAPITest(APIBaseTest):
             code=200,
         )
         self.assertEqual(response.data["username"], "apitest")
+        self.assertIn(
+            f"http://example.com/api/languages/{language.code}/",
+            response.data["languages"],
+        )
 
     def test_filter(self) -> None:
         response = self.client.get(reverse("api:user-list"), {"username": "api"})
@@ -163,7 +171,7 @@ class UserAPITest(APIBaseTest):
                 "is_active": True,
             },
         )
-        self.assertEqual(User.objects.count(), 3)
+        self.assertEqual(User.objects.count(), 4)
 
     def test_delete(self) -> None:
         self.do_request(
@@ -185,7 +193,7 @@ class UserAPITest(APIBaseTest):
             superuser=True,
             code=204,
         )
-        self.assertEqual(User.objects.count(), 3)
+        self.assertEqual(User.objects.count(), 4)
         self.assertEqual(User.objects.filter(is_active=True).count(), 1)
 
     def test_add_group(self) -> None:
@@ -365,6 +373,15 @@ class UserAPITest(APIBaseTest):
         )
         self.assertEqual(request.data["commented"], user.profile.commented)
 
+    def test_contributions(self) -> None:
+        user = User.objects.filter(is_active=True)[0]
+        request = self.do_request(
+            "api:user-contributions",
+            kwargs={"username": user.username},
+            superuser=True,
+        )
+        self.assertEqual(request.data["results"], [])
+
     def test_put(self) -> None:
         self.do_request(
             "api:user-detail",
@@ -424,7 +441,9 @@ class GroupAPITest(APIBaseTest):
         self.assertEqual(response.data["name"], "Users")
 
     def test_create(self) -> None:
-        self.do_request("api:group-list", method="post", code=403)
+        self.do_request(
+            "api:group-list", method="post", code=403, request={"name": "Group"}
+        )
         self.do_request(
             "api:group-list",
             method="post",
@@ -454,6 +473,41 @@ class GroupAPITest(APIBaseTest):
         self.assertEqual(Group.objects.count(), 8)
         group = Group.objects.get(name="Group")
         self.assertEqual(group.defining_project, self.component.project)
+
+        admin = User.objects.create_user("admin", "admin@example.com")
+        self.client.credentials(HTTP_AUTHORIZATION="Token " + admin.auth_token.key)
+
+        # serializer validation fails before perm check even happens causing 400 error
+        # if trying to use a project without permissions
+        self.do_request(
+            "api:group-list",
+            method="post",
+            code=400,
+            authenticated=False,
+            format="json",
+            request={
+                "name": "Group Project",
+                "defining_project": reverse(
+                    "api:project-detail", kwargs=self.project_kwargs
+                ),
+            },
+        )
+
+        self.component.project.add_user(admin, "Administration")
+        self.do_request(
+            "api:group-list",
+            method="post",
+            code=201,
+            authenticated=False,
+            format="json",
+            request={
+                "name": "Group Project",
+                "defining_project": reverse(
+                    "api:project-detail", kwargs=self.project_kwargs
+                ),
+            },
+        )
+        self.assertEqual(Group.objects.count(), 9)
 
     def test_add_role(self) -> None:
         role = Role.objects.get(name="Administration")
@@ -903,7 +957,7 @@ class RoleAPITest(APIBaseTest):
         self.assertEqual(response.data["count"], 2)
         self.authenticate(True)
         response = self.client.get(reverse("api:role-list"))
-        self.assertEqual(response.data["count"], 15)
+        self.assertEqual(response.data["count"], 16)
 
     def test_get_role(self) -> None:
         role = Role.objects.get(name="Access repository")
@@ -928,7 +982,7 @@ class RoleAPITest(APIBaseTest):
             format="json",
             request={"name": "Role", "permissions": ["suggestion.add", "comment.add"]},
         )
-        self.assertEqual(Role.objects.count(), 16)
+        self.assertEqual(Role.objects.count(), 17)
         self.assertEqual(Role.objects.get(name="Role").permissions.count(), 2)
 
     def test_delete(self) -> None:
@@ -939,7 +993,7 @@ class RoleAPITest(APIBaseTest):
             superuser=True,
             code=204,
         )
-        self.assertEqual(Role.objects.count(), 14)
+        self.assertEqual(Role.objects.count(), 15)
 
     def test_put(self) -> None:
         self.do_request(
@@ -1146,6 +1200,96 @@ class ProjectAPITest(APIBaseTest):
             },
         )
         self.assertEqual(Project.objects.count(), 2)
+
+    def test_create_with_billing(self) -> None:
+        with modify_settings(INSTALLED_APPS={"remove": "weblate.billing"}):
+            response = self.do_request(
+                "api:project-list",
+                method="post",
+                code=403,
+                request={
+                    "name": "API project",
+                    "slug": "api-project",
+                    "web": "https://weblate.org/",
+                },
+            )
+            self.assertEqual(
+                {
+                    "errors": [
+                        {
+                            "attr": None,
+                            "code": "permission_denied",
+                            "detail": "Can not create projects",
+                        }
+                    ],
+                    "type": "client_error",
+                },
+                response.data,
+            )
+
+        with modify_settings(INSTALLED_APPS={"prepend": "weblate.billing"}):
+            response = self.do_request(
+                "api:project-list",
+                method="post",
+                code=403,
+                request={
+                    "name": "API project",
+                    "slug": "api-project",
+                    "web": "https://weblate.org/",
+                },
+            )
+            self.assertEqual(
+                {
+                    "errors": [
+                        {
+                            "attr": None,
+                            "code": "permission_denied",
+                            "detail": "No valid billing found or limit exceeded.",
+                        }
+                    ],
+                    "type": "client_error",
+                },
+                response.data,
+            )
+
+            billing = create_test_billing(self.user, invoice=False)
+
+            response = self.do_request(
+                "api:project-list",
+                method="post",
+                code=201,
+                request={
+                    "name": "API project",
+                    "slug": "api-project",
+                    "web": "https://weblate.org/",
+                },
+            )
+            project = Project.objects.get(pk=response.data["id"])
+            self.assertEqual(project.billing, billing)
+
+            response = self.do_request(
+                "api:project-list",
+                method="post",
+                code=403,
+                request={
+                    "name": "API project 2",
+                    "slug": "api-project-2",
+                    "web": "https://weblate.org/",
+                },
+            )
+            self.assertEqual(
+                {
+                    "errors": [
+                        {
+                            "attr": None,
+                            "code": "permission_denied",
+                            "detail": "No valid billing found or limit exceeded.",
+                        }
+                    ],
+                    "type": "client_error",
+                },
+                response.data,
+            )
 
     def test_create_with_source_language(self) -> None:
         self.do_request(
@@ -3001,8 +3145,16 @@ class TranslationAPITest(APIBaseTest):
         self.assertEqual(response_json["count"], 1)
         self.assertEqual(response_json["results"][0]["source"], ["Hello, world!\n"])
 
+    def check_upload_changes(self, previous: int, expected: int) -> None:
+        changes_end = self.component.change_set.count()
+        self.assertEqual(changes_end - previous, expected)
+        for change in self.component.change_set.order_by("-timestamp")[:expected]:
+            self.assertEqual(change.user, self.user)
+            self.assertEqual(change.author, self.user)
+
     def test_upload_bytes(self) -> None:
         self.authenticate()
+        changes_start = self.component.change_set.count()
         with open(TEST_PO, "rb") as handle:
             response = self.client.put(
                 reverse("api:translation-file", kwargs=self.translation_kwargs),
@@ -3025,9 +3177,11 @@ class TranslationAPITest(APIBaseTest):
         self.assertEqual(unit.state, STATE_TRANSLATED)
 
         self.assertEqual(self.component.project.stats.suggestions, 0)
+        self.check_upload_changes(changes_start, 3)
 
     def test_upload(self) -> None:
         self.authenticate()
+        changes_start = self.component.change_set.count()
         with open(TEST_PO, "rb") as handle:
             response = self.client.put(
                 reverse("api:translation-file", kwargs=self.translation_kwargs),
@@ -3051,8 +3205,12 @@ class TranslationAPITest(APIBaseTest):
 
         self.assertEqual(self.component.project.stats.suggestions, 0)
 
+        self.check_upload_changes(changes_start, 3)
+
     def test_upload_source(self) -> None:
         self.authenticate(True)
+
+        changes_start = self.component.change_set.count()
 
         # Upload to translation
         with open(TEST_POT, "rb") as handle:
@@ -3097,6 +3255,8 @@ class TranslationAPITest(APIBaseTest):
 
         self.assertEqual(self.component.project.stats.suggestions, 0)
 
+        self.check_upload_changes(changes_start, 1)
+
     def test_upload_content(self) -> None:
         self.authenticate()
         with open(TEST_PO, "rb") as handle:
@@ -3108,6 +3268,7 @@ class TranslationAPITest(APIBaseTest):
 
     def test_upload_conflicts(self) -> None:
         self.authenticate()
+        changes_start = self.component.change_set.count()
         with open(TEST_PO, "rb") as handle:
             response = self.client.put(
                 reverse("api:translation-file", kwargs=self.translation_kwargs),
@@ -3142,9 +3303,11 @@ class TranslationAPITest(APIBaseTest):
                 "total": 4,
             },
         )
+        self.check_upload_changes(changes_start, 4)
 
     def test_upload_overwrite(self) -> None:
         self.test_upload()
+        changes_start = self.component.change_set.count()
         with open(TEST_PO, "rb") as handle:
             response = self.client.put(
                 reverse("api:translation-file", kwargs=self.translation_kwargs),
@@ -3161,9 +3324,11 @@ class TranslationAPITest(APIBaseTest):
                 "total": 4,
             },
         )
+        self.check_upload_changes(changes_start, 1)
 
     def test_upload_suggest(self) -> None:
         self.authenticate()
+        changes_start = self.component.change_set.count()
         with open(TEST_PO, "rb") as handle:
             response = self.client.put(
                 reverse("api:translation-file", kwargs=self.translation_kwargs),
@@ -3198,6 +3363,31 @@ class TranslationAPITest(APIBaseTest):
                 "total": 4,
             },
         )
+        self.check_upload_changes(changes_start, 3)
+
+    def test_upload_replace(self) -> None:
+        self.authenticate(superuser=True)
+        changes_start = self.component.change_set.count()
+        with open(TEST_PO) as handle:
+            content = handle.read()
+        content = f'{content}\n\nmsgid "Testing"\nmsgstr""\n'
+
+        response = self.client.put(
+            reverse("api:translation-file", kwargs=self.translation_kwargs),
+            {"file": BytesIO(content.encode()), "method": "replace"},
+        )
+        self.assertEqual(
+            response.data,
+            {
+                "accepted": 5,
+                "count": 5,
+                "not_found": 0,
+                "result": True,
+                "skipped": 0,
+                "total": 5,
+            },
+        )
+        self.check_upload_changes(changes_start, 7)
 
     def test_upload_invalid(self) -> None:
         self.authenticate()
@@ -3789,6 +3979,14 @@ class UnitAPITest(APIBaseTest):
             code=200,
             request={"state": "20", "target": "Test translation"},
         )
+        response = self.do_request(
+            "api:unit-detail",
+            kwargs={"pk": unit.pk},
+            method="get",
+            code=200,
+        )
+        data = response.json()
+        self.assertEqual(data["pending"], True)
         # Adding plural where it is not
         self.do_request(
             "api:unit-detail",
@@ -4122,7 +4320,7 @@ class UnitAPITest(APIBaseTest):
         self.assertNotEqual(revision, component.repository.last_revision)
         self.assertEqual(component.stats.all, 12)
 
-    def test_unit_translations(self):
+    def test_unit_translations(self) -> None:
         unit = Unit.objects.get(
             translation__language_code="en", source="Thank you for using Weblate."
         )
@@ -4140,6 +4338,238 @@ class UnitAPITest(APIBaseTest):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["errors"][0]["code"], "not-a-source-unit")
+
+    def test_add_comment(self) -> None:
+        unit = Unit.objects.get(
+            translation__language_code="en", source="Thank you for using Weblate."
+        )
+
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "global"},
+            method="post",
+            code=400,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"], "This field is required."
+        )
+        self.assertEqual(response.data["errors"][0]["attr"], "comment")
+
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "xyz", "comment": "Hello World!"},
+            method="post",
+            code=400,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"], '"xyz" is not a valid choice.'
+        )
+
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "translation", "comment": "Hello World!"},
+            method="post",
+            code=400,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"],
+            '"translation" is not a valid choice for source units.',
+        )
+
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "report", "comment": "Hello World!"},
+            method="post",
+            code=400,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"],
+            '"report" is not a valid choice as source review is disabled.',
+        )
+
+        # Enable reviews to test report comments
+        project = unit.translation.component.project
+        project.source_review = True
+        project.save()
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "report", "comment": "Hello World!"},
+            method="post",
+            code=201,
+        )
+        self.assertIn("id", response.data)
+        comment = response.data
+        self.assertIn("id", comment)
+        self.assertEqual(comment["comment"], "Hello World!")
+        self.assertIn("timestamp", comment)
+        self.assertEqual(comment["user"], "http://example.com/api/users/apitest/")
+
+        unit_cs = Unit.objects.get(
+            translation__language_code="cs", source="Thank you for using Weblate."
+        )
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit_cs.pk}),
+            request={"scope": "global", "comment": "Hello World Global!"},
+            method="post",
+            code=201,
+        )
+        self.assertIn("id", response.data)
+
+        # Reload the object from database
+        unit = Unit.objects.get(
+            translation__language_code="en", source="Thank you for using Weblate."
+        )
+        self.assertCountEqual(
+            unit.all_comments.values_list("comment", flat=True).all(),
+            ["Hello World!", "Hello World Global!"],
+        )
+
+        self.create_acl()
+        response = self.do_request(
+            "api:translation-units",
+            {
+                "language__code": "en",
+                "component__slug": "test",
+                "component__project__slug": "acl",
+            },
+            method="post",
+            superuser=True,
+            request={"key": "key", "value": "Foo"},
+            code=200,
+        )
+        new_unit = Unit.objects.get(pk=response.data["id"])
+        self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": new_unit.pk}),
+            request={"scope": "global", "comment": "another test"},
+            method="post",
+            superuser=True,
+            code=201,
+        )
+
+        # test user has permission to view project but not edit
+        project = unit.translation.component.project
+        project.access_control = Project.ACCESS_PROTECTED
+        project.save()
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "global", "comment": "another test"},
+            method="post",
+            code=403,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"],
+            "You do not have permission to perform this action.",
+        )
+
+    def test_import_comment(self) -> None:
+        unit = Unit.objects.get(
+            translation__language_code="en", source="Thank you for using Weblate."
+        )
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "global", "comment": "test comment", "user_email": 1},
+            method="post",
+            code=400,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"], "Enter a valid email address."
+        )
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={"scope": "global", "comment": "test comment", "timestamp": 1},
+            method="post",
+            code=400,
+        )
+        self.assertIn(
+            "Datetime has wrong format.", response.data["errors"][0]["detail"]
+        )
+
+        user2 = User.objects.create_user(
+            "commentimport", "commentimport@example.org", "x"
+        )
+        self.client.credentials(HTTP_AUTHORIZATION="Token " + user2.auth_token.key)
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={
+                "scope": "global",
+                "comment": "test comment",
+                "timestamp": "20240101T12:00:00.000Z",
+                "user_email": self.user.email,
+            },
+            method="post",
+            authenticated=False,
+            code=403,
+        )
+        self.assertEqual(
+            response.data["errors"][0]["detail"],
+            "You do not have permission to perform this action.",
+        )
+
+        text = "test import comment from different user"
+        timestamp = datetime(2024, 1, 1, 12, 45, 0, tzinfo=UTC)
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={
+                "scope": "global",
+                "comment": text,
+                "timestamp": timestamp.isoformat(),
+                "user_email": user2.email,
+            },
+            method="post",
+            superuser=True,
+            code=201,
+        )
+        comment = response.data
+        self.assertIn("id", comment)
+        self.assertEqual(comment["comment"], text)
+        self.assertEqual(datetime.fromisoformat(comment["timestamp"]), timestamp)
+        self.assertEqual(comment["user"], "http://example.com/api/users/commentimport/")
+
+        text = "test import comment with fallback user"
+        timestamp += +timedelta(hours=1)
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={
+                "scope": "global",
+                "comment": text,
+                "timestamp": timestamp.isoformat(),
+                "user_email": "nonexistent@example.org",
+            },
+            method="post",
+            superuser=True,
+            code=201,
+        )
+        comment = response.data
+        self.assertIn("id", comment)
+        self.assertEqual(comment["comment"], text)
+        self.assertEqual(datetime.fromisoformat(comment["timestamp"]), timestamp)
+        self.assertEqual(comment["user"], "http://example.com/api/users/apitest/")
+
+        text = "test import default timestamp"
+        timestamp = datetime.now(UTC)
+        response = self.do_request(
+            reverse("api:unit-comments", kwargs={"pk": unit.pk}),
+            request={
+                "scope": "global",
+                "comment": text,
+                "user_email": "nonexistent@example.org",
+            },
+            method="post",
+            superuser=True,
+            code=201,
+        )
+        comment = response.data
+        self.assertIn("id", comment)
+        self.assertEqual(comment["comment"], text)
+        self.assertGreaterEqual(datetime.fromisoformat(comment["timestamp"]), timestamp)
+        self.assertEqual(comment["user"], "http://example.com/api/users/apitest/")
+
+    def test_comment_serializer(self) -> None:
+        # test CommentSerializer works even if unit is not provided in context
+        serializer = CommentSerializer(
+            data={"scope": "translation", "comment": "note"},
+        )
+        self.assertTrue(serializer.is_valid())
 
 
 class ScreenshotAPITest(APIBaseTest):

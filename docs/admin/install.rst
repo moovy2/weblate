@@ -206,7 +206,7 @@ Django REST Framework
      :header-rows: 1
 
      * - Optional dependency specifier
-       - Python Packages
+       - Python packages
        - Weblate feature
 
      * - ``alibaba``
@@ -231,8 +231,8 @@ Django REST Framework
        - :ref:`vcs-gerrit`
 
      * - ``google``
-       - | `google-cloud-translate <https://pypi.org/project/google-cloud-translate>`_
-         | `google-cloud-storage <https://pypi.org/project/google-cloud-storage>`_
+       - | `google-cloud-storage <https://pypi.org/project/google-cloud-storage>`_
+         | `google-cloud-translate <https://pypi.org/project/google-cloud-translate>`_
        - :ref:`mt-google-translate-api-v3` with glossary support
 
      * - ``ldap``
@@ -276,7 +276,7 @@ Django REST Framework
        - wsgi server for Weblate
 
      * - ``zxcvbn``
-       - | `django-zxcvbn-password <https://pypi.org/project/django-zxcvbn-password>`_
+       - | `django-zxcvbn-password-validator <https://pypi.org/project/django-zxcvbn-password-validator>`_
        - :ref:`password-authentication`
 
 When installing using pip, you can directly specify desired features when installing:
@@ -326,6 +326,16 @@ Troubleshooting pip install
    .. code-block:: sh
 
       uv pip install --force-reinstall --no-binary :all: cffi
+
+``error: ‘xmlSecKeyDataFormatEngine’ undeclared (first use in this function); did you mean ‘xmlSecKeyDataFormat’?``
+   This is a known issue of the xmlsec package, please see https://github.com/xmlsec/python-xmlsec/issues/314.
+
+``lxml & xmlsec libxml2 library version mismatch``
+   The ``lxml`` and ``xmlsec`` packages have to be built against one ``libxml2``. You should build them locally to avoid this issue:
+
+   .. code-block:: sh
+
+      uv pip install --force-reinstall --no-binary xmlsec --no-binary lxml lxml xmlsec
 
 Other system requirements
 +++++++++++++++++++++++++
@@ -704,7 +714,7 @@ Django documentation.
 .. hint::
 
     In case you get error about not supported authentication (for example
-    ``SMTP AUTH extension not supported by server``), it is most likely caused
+    :samp:`SMTP AUTH extension not supported by server`), it is most likely caused
     by using insecure connection and server refuses to authenticate this way.
     Try enabling :setting:`django:EMAIL_USE_TLS` in such case.
 
@@ -718,29 +728,39 @@ Django documentation.
 Running behind reverse proxy
 ++++++++++++++++++++++++++++
 
-Several features in Weblate rely on being able to get client IP address. This
-includes :ref:`rate-limit`, :ref:`spam-protection` or :ref:`audit-log`.
+Several features in Weblate rely on correct HTTP headers being passed to
+Weblate. When using reverse proxy, please make sure that the needed information
+is correctly passed.
 
-Weblate parses IP address from the ``REMOTE_ADDR`` which is set by the WSGI
-handler. This might be empty (when using socket for WSGI) or contain a reverse
-proxy address, so Weblate needs an additional HTTP header with client IP
-address.
+Client IP address
+   This is needed for :ref:`rate-limit`, :ref:`spam-protection` or :ref:`audit-log`.
 
-Enabling :setting:`IP_BEHIND_REVERSE_PROXY` might be enough for the most usual
-setups, but you might need to adjust :setting:`IP_PROXY_HEADER` and
-:setting:`IP_PROXY_OFFSET` as well (use :envvar:`WEBLATE_IP_PROXY_HEADER` and
-:envvar:`WEBLATE_IP_PROXY_OFFSET` in the Docker container).
+   Weblate parses IP address from the ``REMOTE_ADDR``, which is set by the WSGI
+   handler. This might be empty (when using socket for WSGI) or contain a
+   reverse proxy address, so Weblate needs an additional HTTP header with
+   a client IP address.
 
-.. hint::
+   Enabling :setting:`IP_BEHIND_REVERSE_PROXY` should be sufficient for the most
+   usual setups, but you might need to adjust :setting:`IP_PROXY_HEADER` and
+   :setting:`IP_PROXY_OFFSET` as well (use :envvar:`WEBLATE_IP_PROXY_HEADER`
+   and :envvar:`WEBLATE_IP_PROXY_OFFSET` in the Docker container).
 
-   This configuration cannot be turned on by default because it would allow IP
-   address spoofing on installations that don't have a properly configured
-   reverse proxy.
+   .. hint::
 
-Another thing to take care of is the :http:header:`Host` header. It should match
-to whatever is configured as :setting:`SITE_DOMAIN`. Additional configuration
-might be needed in your reverse proxy (for example use ``ProxyPreserveHost On``
-for Apache or ``proxy_set_header Host $host;`` with nginx).
+      This configuration cannot be turned on by default, because it would allow IP
+      address spoofing on installations that don't have a properly configured
+      reverse proxy.
+
+Server host name
+   The :http:header:`Host` header should match to whatever is configured as
+   :setting:`SITE_DOMAIN`. Additional configuration might be needed in your
+   reverse proxy (for example use ``ProxyPreserveHost On`` for Apache or
+   ``proxy_set_header Host $host;`` with nginx).
+
+Client protocol
+   Not passing correct protocol may cause Weblate to end up in redirection
+   loop trying to upgrade client to HTTPS. Make sure it is correctly exposed by
+   the reverse proxy as :http:header:`X-Forwarded-Proto`.
 
 .. seealso::
 
